@@ -1,2 +1,2 @@
-# Beasts-but-it-is-C
+# Beasts but it's C
 Multiplayer game using C
