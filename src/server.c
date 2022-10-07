@@ -1,7 +1,8 @@
 #include "server.h"
 
-#include <ncurses.h>
 #include <unistd.h>
+#include <ncurses.h>
+#include <sys/time.h>
 
 void server_init(SERVER *server)
 {
@@ -10,6 +11,7 @@ void server_init(SERVER *server)
         return;
     }
 
+    server->pid = getpid();
     server->number_of_players = 0;
     map_init(&server->map);
     server->turns = 0;
@@ -17,6 +19,11 @@ void server_init(SERVER *server)
 
 void *server_main_loop(void)
 {
+    struct timeval last_update, now;
+
+    double time_per_turn = 500.0;
+    double delta_time = time_per_turn;
+
     SERVER server;
     server_init(&server);
     map_init(&server.map);
@@ -33,18 +40,34 @@ void *server_main_loop(void)
     cbreak();
     curs_set(0);
     refresh();
-    timeout(500);  // TODO: Replace with real timer.
+    timeout(1);
 
     colors_init();
     player_init(&server.players[0], ++server.number_of_players, (COORDS){ 9, 5 }, HUMAN);
 
     attron(COLOR_PAIR(PAIR_DEFAULT));
+
+    gettimeofday(&last_update, NULL);
     for(;;)
     {
+        gettimeofday(&now, NULL);
+        delta_time += ((now.tv_sec - last_update.tv_sec) * 1000) + ((now.tv_usec - last_update.tv_usec) / 1000);
+        last_update = now;
+
+        mvaddstr(3, 60, "Server's PID: "); printw("%d", server.pid);
+        mvaddstr(4, 61, "Campsite X/Y: "); printw("%hhu/%hhu", 23, 11);
+        mvaddstr(5, 61, "Round number: "); printw("%u", server.turns);
+        mvaddstr(6, 61, "Delta time: "); printw("%4.lf", delta_time);
+
         int ch = getch();
         if (ch == 'q' || ch == 'Q')
         {
             break;
+        }
+
+        if (delta_time < time_per_turn)
+        {
+            continue;
         }
 
         map_draw(&server.map, 5, 2);
@@ -54,11 +77,7 @@ void *server_main_loop(void)
             player_draw(&server.players[i]);
         }
 
-
-        mvaddstr(3, 60, "Turns: "); printw("%d", server.turns);
-
-
-
+        delta_time -= time_per_turn;
         server.turns++;
     }
     attroff(COLOR_PAIR(PAIR_DEFAULT));

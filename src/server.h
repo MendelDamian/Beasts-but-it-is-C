@@ -11,6 +11,7 @@
 
 typedef struct server_t
 {
+    int pid;
     uint8_t number_of_players;
     PLAYER players[MAX_PLAYERS];
     MAP map;
