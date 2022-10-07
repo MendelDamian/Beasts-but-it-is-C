@@ -5,14 +5,20 @@
 
 #include "player.h"
 #include "map.h"
+#include "colors.h"
+
+#define MAX_PLAYERS 4
 
 typedef struct server_t
 {
     uint8_t number_of_players;
-    uint8_t max_players;
-    PLAYER *players;
+    PLAYER players[MAX_PLAYERS];
     MAP map;
+    uint32_t turns;
 
 } SERVER;
+
+void server_init(SERVER *server);
+void *server_main_loop(void);
 
 #endif //SERVER_H

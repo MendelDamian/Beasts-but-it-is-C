@@ -4,11 +4,11 @@
 #include <stdint.h>
 
 #include "direction.h"
+#include "coordinate.h"
 
 typedef struct beast_t
 {
-    uint8_t x;
-    uint8_t y;
+    COORDS position;
     DIRECTION direction;
     // Thread handle
 } BEAST;

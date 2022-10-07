@@ -1,9 +1,14 @@
 CC = gcc
+
 CFLAGS = -Wall -pedantic -std=c11 -g
 LDFLAGS = -lm -lncurses
-SRC = $(wildcard src/*.c)
-OBJ = $(patsubst src/%.c, build/%.o, $(SRC))
-EXEC = build/Beasts
+
+SRC_DIR = src
+BUILD_DIR = build
+
+SRC = $(wildcard $(SRC_DIR)/*.c)
+OBJ = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRC))
+EXEC = $(BUILD_DIR)/Beasts
 
 all: $(EXEC)
 
@@ -15,5 +20,8 @@ build/%.o: src/%.c
 
 clean:
 	rm -f $(OBJ) $(EXEC)
+
+run: $(EXEC)
+	./$(EXEC)
 
 .HANDY: clean all
