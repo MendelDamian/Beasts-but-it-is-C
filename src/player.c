@@ -10,6 +10,8 @@ void player_init(PLAYER *player, uint8_t number, COORDS position, PLAYER_TYPE ty
         return;
     }
 
+    player->pid = -1;
+    player->socket_fd = -1;
     player->number = number;
     player->position = position;
     player->carried_coins = 0;
@@ -18,51 +20,6 @@ void player_init(PLAYER *player, uint8_t number, COORDS position, PLAYER_TYPE ty
     player->direction = NONE;
     player->state = ALIVE;
     player->type = type;
-}
-
-void player_move(PLAYER *player, DIRECTION direction, MAP *map)
-{
-    if (player == NULL)
-    {
-        return;
-    }
-
-    player->direction = direction;
-
-    switch (direction)
-    {
-        case NORTH:
-            if (map->tiles[player->position.y - 1][player->position.x] != TILE_WALL)
-            {
-                player->position.y--;
-            }
-            break;
-
-        case SOUTH:
-            if (map->tiles[player->position.y + 1][player->position.x] != TILE_WALL)
-            {
-                player->position.y++;
-            }
-            break;
-
-        case WEST:
-            if (map->tiles[player->position.y][player->position.x - 1] != TILE_WALL)
-            {
-                player->position.x--;
-            }
-            break;
-
-        case EAST:
-            if (map->tiles[player->position.y][player->position.x + 1] != TILE_WALL)
-            {
-                player->position.x++;
-            }
-            break;
-
-        default:
-        case NONE:
-            break;
-    }
 }
 
 void player_draw(PLAYER *player)

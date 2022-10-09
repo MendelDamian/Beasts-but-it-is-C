@@ -19,10 +19,10 @@ typedef enum player_type_t
     CPU,
 } PLAYER_TYPE;
 
-// TODO: Add process handler.
 typedef struct player_t
 {
 	int pid;                // PID of the process.
+    int socket_fd;          // Socket file descriptor.
     uint8_t number;         // Number of the player.
     COORDS position;        // Position of the player.
     uint16_t carried_coins; // Number of coins carried by the player.
@@ -34,7 +34,6 @@ typedef struct player_t
 } PLAYER;
 
 void player_init(PLAYER *player, uint8_t number, COORDS position, PLAYER_TYPE type);
-void player_move(PLAYER *player, DIRECTION direction, MAP *map);
 void player_draw(PLAYER *player);
 void player_die(PLAYER *player);
 

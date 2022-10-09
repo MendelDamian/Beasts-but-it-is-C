@@ -1,5 +1,6 @@
 #include <sys/time.h>
-#include <ncurses.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "timer.h"
 
@@ -11,7 +12,7 @@ void *timer(void *arguments)
     }
 
     TIMER_ARGS *args = (TIMER_ARGS *)arguments;
-    if (args->delta_time == NULL || args->running == NULL || args->pressed_key == NULL)
+    if (args->delta_time == NULL || args->running == NULL)
     {
         return NULL;
     }
@@ -21,8 +22,9 @@ void *timer(void *arguments)
 
     while (*args->running)
     {
+        nanosleep((const struct timespec[]){{0, 1000000L}}, NULL);
+
         gettimeofday(&now, NULL);
-        *args->pressed_key = getch();
         *args->delta_time += ((now.tv_sec - last_update.tv_sec) * 1000) + ((now.tv_usec - last_update.tv_usec) / 1000);
         last_update = now;
     }

@@ -7,7 +7,6 @@ typedef struct timer_args_t
 {
     double *delta_time;
     bool *running;
-    char *pressed_key;
 } TIMER_ARGS;
 
 void *timer(void *arguments);

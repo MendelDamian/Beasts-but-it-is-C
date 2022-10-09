@@ -1,10 +1,18 @@
-#include "server.h"
-
-#include <unistd.h>
 #include <ncurses.h>
-#include <sys/time.h>
+#include <pthread.h>
+#include <string.h>
+#include <unistd.h>
 
-static bool running = true;
+#include "conf.h"
+#include "server.h"
+#include "game.h"
+#include "timer.h"
+#include "keyboard_handler.h"
+
+typedef struct on_key_pressed_args_t
+{
+    bool *running;
+} ON_KEY_PRESSED_ARGS;
 
 void server_init(SERVER *server)
 {
@@ -13,87 +21,136 @@ void server_init(SERVER *server)
         return;
     }
 
-    server->pid = getpid();
     server->number_of_players = 0;
-    map_init(&server->map);
-    server->turns = 0;
+    memset(server->players, 0, sizeof(server->players));
 }
 
-void *server_main_loop(void)
+void on_key_pressed(char key, void *arguments)
 {
-    struct timeval last_update, now;
-
-    double delta_time = TIME_PER_TURN;
-
-    SERVER server;
-    server_init(&server);
-    map_init(&server.map);
-    if (map_load(&server.map, "assets/map.txt"))
+    if (arguments == NULL)
     {
-        return NULL;
+        return;
     }
 
-    start_color();
+    ON_KEY_PRESSED_ARGS *args = (ON_KEY_PRESSED_ARGS *)arguments;
+
+    if (args->running == NULL)
+    {
+        return;
+    }
+
+    if (key == 'q' || key == 'Q')
+    {
+        *args->running = false;
+    }
+}
+
+void server_main_loop(int server_socket_fd)
+{
+    bool running = true;
+    double delta_time = TIME_PER_TURN;
 
     initscr();
+    start_color();
     noecho();
     keypad(stdscr, TRUE);
     cbreak();
     curs_set(0);
     refresh();
-    timeout(1);
+    timeout(0);
 
     colors_init();
-    player_init(&server.players[0], ++server.number_of_players, (COORDS){ 9, 5 }, HUMAN);
+
+    SERVER server;
+    server_init(&server);
+
+    GAME game;
+    game_init(&game);
+    game.server_pid = getpid();
+    game.server_socket_fd = server_socket_fd;
+    if (map_load(&game.map, "assets/map.txt"))
+    {
+        return;
+    }
+
+    pthread_t timer_thread;
+    TIMER_ARGS timer_args = { &delta_time, &running };
+    pthread_create(&timer_thread, NULL, timer, (void *)&timer_args);
+
+    pthread_t keyboard_handler_thread;
+    ON_KEY_PRESSED_ARGS on_key_pressed_args = { &running };
+    KEYBOARD_HANDLER_ARGS keyboard_handler_args = { &on_key_pressed, &on_key_pressed_args, &running };
+    pthread_create(&keyboard_handler_thread, NULL, &keyboard_handler, (void *)&keyboard_handler_args);
 
     attron(COLOR_PAIR(PAIR_DEFAULT));
 
-    gettimeofday(&last_update, NULL);
     while (running)
     {
-        gettimeofday(&now, NULL);
-        delta_time += ((now.tv_sec - last_update.tv_sec) * 1000) + ((now.tv_usec - last_update.tv_usec) / 1000);
-        last_update = now;
-
-        mvaddstr(3, 60, "Server's PID: "); printw("%d", server.pid);
+        mvaddstr(3, 60, "Server's PID: "); printw("%d", game.server_pid);
         mvaddstr(4, 61, "Campsite X/Y: "); printw("%hhu/%hhu", 23, 11);
-        mvaddstr(5, 61, "Round number: "); printw("%u", server.turns);
+        mvaddstr(5, 61, "Round number: "); printw("%u", game.turns);
         mvaddstr(6, 61, "Delta time: "); printw("%4.lf", delta_time);
 
-        handle_keys();
+        map_draw(&game.map, 5, 2);
 
         if (delta_time < TIME_PER_TURN)
         {
             continue;
         }
 
-        map_draw(&server.map, 5, 2);
-
-        for (int i = 0; i < server.number_of_players; i++)
-        {
-            player_draw(&server.players[i]);
-        }
-
         delta_time -= TIME_PER_TURN;
-        server.turns++;
+        game.turns++;
     }
-    attroff(COLOR_PAIR(PAIR_DEFAULT));
-    endwin();
 
-    return NULL;
+    attroff(COLOR_PAIR(PAIR_DEFAULT));
+
+    pthread_join(timer_thread, NULL);
+    pthread_join(keyboard_handler_thread, NULL);
+
+    endwin();
 }
 
-void handle_keys(void)
+void player_move(PLAYER *player, DIRECTION direction, MAP *map)
 {
-    int ch = getch();
-    switch (ch)
+    if (player == NULL)
     {
-        case 'q':
-        case 'Q':
-            running = false;
+        return;
+    }
+
+    player->direction = direction;
+
+    switch (direction)
+    {
+        case NORTH:
+            if (map->tiles[player->position.y - 1][player->position.x] != TILE_WALL)
+            {
+                player->position.y--;
+            }
+            break;
+
+        case SOUTH:
+            if (map->tiles[player->position.y + 1][player->position.x] != TILE_WALL)
+            {
+                player->position.y++;
+            }
+            break;
+
+        case WEST:
+            if (map->tiles[player->position.y][player->position.x - 1] != TILE_WALL)
+            {
+                player->position.x--;
+            }
+            break;
+
+        case EAST:
+            if (map->tiles[player->position.y][player->position.x + 1] != TILE_WALL)
+            {
+                player->position.x++;
+            }
             break;
 
         default:
+        case NONE:
             break;
     }
 }
