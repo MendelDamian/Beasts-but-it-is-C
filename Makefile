@@ -1,7 +1,7 @@
 CC = gcc
 
 CFLAGS = -Wall -pedantic -std=c11 -g
-LDFLAGS = -lm -lncurses
+LDFLAGS = -lm -lncurses -lpthread
 
 SRC_DIR = src
 BUILD_DIR = build

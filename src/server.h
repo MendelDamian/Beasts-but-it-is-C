@@ -6,8 +6,7 @@
 #include "player.h"
 #include "map.h"
 #include "colors.h"
-
-#define MAX_PLAYERS 4
+#include "conf.h"
 
 typedef struct server_t
 {
@@ -16,10 +15,10 @@ typedef struct server_t
     PLAYER players[MAX_PLAYERS];
     MAP map;
     uint32_t turns;
-
 } SERVER;
 
 void server_init(SERVER *server);
 void *server_main_loop(void);
+void handle_keys(void);
 
 #endif //SERVER_H

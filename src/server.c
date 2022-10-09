@@ -4,6 +4,8 @@
 #include <ncurses.h>
 #include <sys/time.h>
 
+static bool running = true;
+
 void server_init(SERVER *server)
 {
     if (server == NULL)
@@ -21,8 +23,7 @@ void *server_main_loop(void)
 {
     struct timeval last_update, now;
 
-    double time_per_turn = 500.0;
-    double delta_time = time_per_turn;
+    double delta_time = TIME_PER_TURN;
 
     SERVER server;
     server_init(&server);
@@ -48,7 +49,7 @@ void *server_main_loop(void)
     attron(COLOR_PAIR(PAIR_DEFAULT));
 
     gettimeofday(&last_update, NULL);
-    for(;;)
+    while (running)
     {
         gettimeofday(&now, NULL);
         delta_time += ((now.tv_sec - last_update.tv_sec) * 1000) + ((now.tv_usec - last_update.tv_usec) / 1000);
@@ -59,13 +60,9 @@ void *server_main_loop(void)
         mvaddstr(5, 61, "Round number: "); printw("%u", server.turns);
         mvaddstr(6, 61, "Delta time: "); printw("%4.lf", delta_time);
 
-        int ch = getch();
-        if (ch == 'q' || ch == 'Q')
-        {
-            break;
-        }
+        handle_keys();
 
-        if (delta_time < time_per_turn)
+        if (delta_time < TIME_PER_TURN)
         {
             continue;
         }
@@ -77,11 +74,26 @@ void *server_main_loop(void)
             player_draw(&server.players[i]);
         }
 
-        delta_time -= time_per_turn;
+        delta_time -= TIME_PER_TURN;
         server.turns++;
     }
     attroff(COLOR_PAIR(PAIR_DEFAULT));
     endwin();
 
     return NULL;
+}
+
+void handle_keys(void)
+{
+    int ch = getch();
+    switch (ch)
+    {
+        case 'q':
+        case 'Q':
+            running = false;
+            break;
+
+        default:
+            break;
+    }
 }
