@@ -1,45 +1,67 @@
-//#include <stdio.h>
-//#include <stdlib.h>
-//#include <unistd.h>
-//#include <sys/types.h>
-//#include <sys/socket.h>
-//#include <netinet/in.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <time.h>
 
+#include "conf.h"
 #include "server.h"
-//#include "conf.h"
-//#include "client.h"
+#include "client.h"
 
 int main(int argc, char *argv[])
 {
-//    main_loop(1);
-    server_main_loop(1);
-//    // Create socket.
-//    int socket_fd = socket(AF_INET, SOCK_STREAM, 0);  // IPv4, TCP, default protocol.
-//
-//    // Specify address for the socket.
-//    struct sockaddr_in server_address;
-//    server_address.sin_family = AF_INET;
-//    server_address.sin_port = htons(PORT);
-//    server_address.sin_addr.s_addr = INADDR_ANY;
-//
-//    int connection = connect(socket_fd, (struct sockaddr *)&server_address, sizeof(server_address));
-//    if (connection == -1)
-//    {
-//        server_main_loop();
-//    }
-//    else
-//    {
-//        printf("Connected to server.\n");
-//
-//        // Receive data from the server.
-//        char server_response[256];
-//        recv(socket_fd, &server_response, sizeof(server_response), 0);
-//
-//        // Print out the server's response.
-//        printf("The server sent the data: %s\n", server_response);
-//
-//        close(socket_fd);
-//    }
-////    server_main_loop();
+    srand(time(NULL));
+
+    // Create a socket.
+    int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_fd < 0)
+    {
+        perror("ERROR opening socket");
+        exit(1);
+    }
+
+    // Create address of the server.
+    struct sockaddr_in server_address = {
+        .sin_family = AF_INET,
+        .sin_port = htons(PORT),
+        .sin_addr.s_addr = INADDR_ANY
+    };
+
+    // Try to connect to the server.
+    int connection_status = connect(socket_fd, (struct sockaddr *)&server_address, sizeof(server_address));
+    if (connection_status == -1)
+    {
+        // Create a server.
+        if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0)
+        {
+            perror("setsockopt(SO_REUSEADDR) failed");
+            exit(2);
+        }
+
+        // Bind the socket to our specified IP and port.
+        int bind_status = bind(socket_fd, (struct sockaddr *)&server_address, sizeof(server_address));
+        if (bind_status == -1)
+        {
+            perror("ERROR on binding");
+            exit(3);
+        }
+
+        // Listen for connections.
+        int listen_status = listen(socket_fd, MAX_PLAYERS);
+        if (listen_status == -1)
+        {
+            perror("ERROR on listening");
+            exit(4);
+        }
+
+        server_main_loop(socket_fd);
+    }
+    else
+    {
+        // Connect to the server.
+        client_main_loop(socket_fd);
+    }
+
+    close(socket_fd);
     return 0;
 }

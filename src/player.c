@@ -3,7 +3,7 @@
 
 #include "player.h"
 
-void player_init(PLAYER *player, uint8_t number, COORDS position, PLAYER_TYPE type)
+void player_init(PLAYER *player, COORDS position, PLAYER_TYPE type)
 {
     if (player == NULL)
     {
@@ -12,7 +12,7 @@ void player_init(PLAYER *player, uint8_t number, COORDS position, PLAYER_TYPE ty
 
     player->pid = -1;
     player->socket_fd = -1;
-    player->number = number;
+    player->thread_id = 0;
     player->position = position;
     player->carried_coins = 0;
     player->brought_coins = 0;
@@ -22,7 +22,7 @@ void player_init(PLAYER *player, uint8_t number, COORDS position, PLAYER_TYPE ty
     player->type = type;
 }
 
-void player_draw(PLAYER *player)
+void player_draw(PLAYER *player, uint8_t x_offset, uint8_t y_offset)
 {
     if (player == NULL)
     {
@@ -31,8 +31,7 @@ void player_draw(PLAYER *player)
 
     attron(COLOR_PAIR(PAIR_PLAYER));
 
-    move(player->position.x, player->position.y);
-    mvaddch(player->position.x, player->position.y, player->number + '0');
+    mvaddch(player->position.y + y_offset, player->position.x + x_offset, player->number + '0');
 
     attroff(COLOR_PAIR(PAIR_PLAYER));
 }

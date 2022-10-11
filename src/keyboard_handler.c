@@ -9,16 +9,16 @@ void *keyboard_handler(void *arguments)
         return NULL;
     }
 
-    KEYBOARD_HANDLER_ARGS *args = (KEYBOARD_HANDLER_ARGS *)arguments;
-    if (args->on_key_pressed == NULL || args->running == NULL)
+    KEYBOARD_HANDLER_ARGS args = *(KEYBOARD_HANDLER_ARGS *)arguments;
+    if (args.on_key_pressed == NULL || args.running == NULL)
     {
         return NULL;
     }
 
-    while (*args->running)
+    while (*args.running)
     {
         char key = getch();
-        args->on_key_pressed(key, args->on_key_pressed_args);
+        args.on_key_pressed(key, args.on_key_pressed_args);
     }
 
     return NULL;

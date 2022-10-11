@@ -24,4 +24,7 @@ clean:
 run: $(EXEC)
 	./$(EXEC)
 
-.HANDY: clean all
+gdb: $(EXEC)
+	gdb -tui $(EXEC)
+
+.PHONY: clean run

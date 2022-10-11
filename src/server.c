@@ -2,17 +2,37 @@
 #include <pthread.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <stdlib.h>
 
 #include "conf.h"
 #include "server.h"
 #include "game.h"
 #include "timer.h"
 #include "keyboard_handler.h"
+#include "coordinate.h"
+#include "packets.h"
 
 typedef struct on_key_pressed_args_t
 {
     bool *running;
 } ON_KEY_PRESSED_ARGS;
+
+typedef struct server_acceptance_args_t
+{
+    bool *running;
+    GAME *game;
+    SERVER *server;
+} SERVER_ACCEPTANCE_ARGS;
+
+typedef struct server_player_handler_args_t
+{
+    bool *running;
+    GAME *game;
+    SERVER *server;
+    PLAYER *player;
+} SERVER_PLAYER_HANDLER_ARGS;
 
 void server_init(SERVER *server)
 {
@@ -23,6 +43,81 @@ void server_init(SERVER *server)
 
     server->number_of_players = 0;
     memset(server->players, 0, sizeof(server->players));
+}
+
+PLAYER *server_add_player(SERVER *server)
+{
+    if (server == NULL)
+    {
+        return NULL;
+    }
+
+    if (server->number_of_players >= MAX_PLAYERS)
+    {
+        return NULL;
+    }
+
+    for (int i = 0; i < MAX_PLAYERS; ++i)
+    {
+        if (server->players[i].pid == 0)
+        {
+            server->number_of_players++;
+            server->players[i].number = i + 1;
+            return &server->players[i];
+        }
+    }
+
+    return NULL;
+}
+
+void server_remove_player(SERVER *server, int pid)
+{
+    if (server == NULL)
+    {
+        return;
+    }
+
+    for (int i = 0; i < server->number_of_players; i++)
+    {
+        if (server->players[i].pid == pid)
+        {
+            memset(&server->players[i], 0, sizeof(PLAYER));
+            server->number_of_players--;
+            break;
+        }
+    }
+}
+
+COORDS find_spot_for_player(MAP *map, SERVER *server)
+{
+    if (map == NULL || server == NULL)
+    {
+        return (COORDS){-1, -1};
+    }
+
+    while (1)
+    {
+        int x = rand() % map->width;
+        int y = rand() % map->height;
+
+        if (map->tiles[y][x] == TILE_EMPTY)
+        {
+            bool found = false;
+            for (int i = 0; i < server->number_of_players; i++)
+            {
+                if (server->players[i].position.x == x && server->players[i].position.y == y)
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+            {
+                return (COORDS){y, x};
+            }
+        }
+    }
 }
 
 void on_key_pressed(char key, void *arguments)
@@ -43,6 +138,97 @@ void on_key_pressed(char key, void *arguments)
     {
         *args->running = false;
     }
+}
+
+void *server_player_handler(void *arguments)
+{
+    if (arguments == NULL)
+    {
+        return NULL;
+    }
+
+    SERVER_PLAYER_HANDLER_ARGS args = *(SERVER_PLAYER_HANDLER_ARGS *)arguments;
+    if (args.running == NULL || args.game == NULL || args.server == NULL || args.player == NULL)
+    {
+        return NULL;
+    }
+
+    while (*args.running)
+    {
+        PACKET_DATA packet_data;
+        ssize_t bytes_received = recv(args.player->socket_fd, &packet_data, sizeof(PACKET_DATA), 0);
+        if (bytes_received <= 0)
+        {
+            int socket_fd = args.player->socket_fd;
+            server_remove_player(args.server, args.player->pid);
+            close(socket_fd);
+            break;
+        }
+
+        args.player->pid = packet_data.pid;
+        player_move(args.player, packet_data.direction, &args.game->map);
+
+        MAP_CHUNK chunk;
+        map_get_chunk(&args.game->map, &chunk, args.player->position);
+        PACKET_DATA_RESPONSE packet_data_response = {
+            .pid = args.game->server_pid,
+            .chunk = chunk,
+            .turns = args.game->turns,
+            .carried_coins = args.player->carried_coins,
+            .brought_coins = args.player->brought_coins,
+            .deaths = args.player->deaths,
+            .position = args.player->position,
+            .state = args.player->state,
+            .end = false,
+        };
+
+        send(args.player->socket_fd, (void *)&packet_data_response, sizeof(PACKET_DATA_RESPONSE), 0);
+    }
+
+    return NULL;
+}
+
+void *server_acceptance(void *arguments)
+{
+    if (arguments == NULL)
+    {
+        return NULL;
+    }
+
+    SERVER_ACCEPTANCE_ARGS args = *(SERVER_ACCEPTANCE_ARGS *)arguments;
+    if (args.running == NULL || args.game == NULL || args.server == NULL)
+    {
+        return NULL;
+    }
+
+    while (*args.running)
+    {
+        int client_socket = accept(args.game->server_socket_fd,NULL, NULL);
+        if (client_socket == -1)
+        {
+            continue;
+        }
+
+        PLAYER *player = server_add_player(args.server);
+        if (player == NULL)
+        {
+            close(client_socket);
+            continue;
+        }
+
+        player_init(player, find_spot_for_player(&args.game->map, args.server), HUMAN);
+        player->socket_fd = client_socket;
+
+        SERVER_PLAYER_HANDLER_ARGS player_handler_args = {
+            .running = args.running,
+            .game = args.game,
+            .server = args.server,
+            .player = player,
+        };
+        pthread_create(&player->thread_id, NULL, server_player_handler, (void *)&player_handler_args);
+    }
+
+    return NULL;
 }
 
 void server_main_loop(int server_socket_fd)
@@ -68,8 +254,10 @@ void server_main_loop(int server_socket_fd)
     game_init(&game);
     game.server_pid = getpid();
     game.server_socket_fd = server_socket_fd;
-    if (map_load(&game.map, "assets/map.txt"))
+
+    if (map_load(&game.map, MAP_FILE))
     {
+        perror("ERROR on map_load");
         return;
     }
 
@@ -79,23 +267,64 @@ void server_main_loop(int server_socket_fd)
 
     pthread_t keyboard_handler_thread;
     ON_KEY_PRESSED_ARGS on_key_pressed_args = { &running };
-    KEYBOARD_HANDLER_ARGS keyboard_handler_args = { &on_key_pressed, &on_key_pressed_args, &running };
-    pthread_create(&keyboard_handler_thread, NULL, &keyboard_handler, (void *)&keyboard_handler_args);
+    KEYBOARD_HANDLER_ARGS keyboard_handler_args = {
+            &on_key_pressed,
+            &on_key_pressed_args,
+            &running
+    };
+    pthread_create(&keyboard_handler_thread, NULL, keyboard_handler, (void *)&keyboard_handler_args);
+
+    pthread_t server_acceptance_thread;
+    SERVER_ACCEPTANCE_ARGS server_acceptance_args = {
+        .running = &running,
+        .game = &game,
+        .server = &server,
+    };
+    pthread_create(&server_acceptance_thread, NULL, server_acceptance, (void *)&server_acceptance_args);
+    pthread_detach(server_acceptance_thread);
 
     attron(COLOR_PAIR(PAIR_DEFAULT));
 
     while (running)
     {
-        mvaddstr(3, 60, "Server's PID: "); printw("%d", game.server_pid);
-        mvaddstr(4, 61, "Campsite X/Y: "); printw("%hhu/%hhu", 23, 11);
-        mvaddstr(5, 61, "Round number: "); printw("%u", game.turns);
-        mvaddstr(6, 61, "Delta time: "); printw("%4.lf", delta_time);
-
-        map_draw(&game.map, 5, 2);
-
         if (delta_time < TIME_PER_TURN)
         {
             continue;
+        }
+
+//        clear();
+        map_draw(&game.map, 5, 2);
+
+        mvaddstr(3, 60, "Server's PID: "); printw("%d", game.server_pid);
+        mvaddstr(4, 61, "Campsite X/Y: "); printw("%hhu/%hhu", 23, 11);
+        mvaddstr(5, 61, "Round number: "); printw("%u", game.turns);
+
+        mvaddstr(8, 60, "Players: "); printw("%hhu", server.number_of_players);
+        mvaddstr(9, 61, "PID");
+        mvaddstr(10, 61, "Type");
+        mvaddstr(11, 61, "Curr X/Y");
+        mvaddstr(12, 61, "Deaths");
+
+        for (int i = 0; i < MAX_PLAYERS; i++)
+        {
+            PLAYER *player = &server.players[i];
+            mvaddstr(8, 72 + 9 * i, " "); printw("Player%d", i + 1);
+            if (player->pid)
+            {
+                mvaddstr(9, 72 + 9 * i, " "); printw("%d       ", player->pid);
+                mvaddstr(10, 72 + 9 * i, " "); printw("%s  ", player->type == HUMAN ? "Human" : "CPU");
+                mvaddstr(11, 72 + 9 * i, " "); printw("%02hhu/%02hhu", player->position.x, player->position.y);
+                mvaddstr(12, 72 + 9 * i, " "); printw("%hhu", player->deaths);
+
+                player_draw(player, 5, 2);
+            }
+            else
+            {
+                mvaddstr(9, 72 + 9 * i, " "); printw("-");
+                mvaddstr(10, 72 + 9 * i, " "); printw("-");
+                mvaddstr(11, 72 + 9 * i, " "); printw("--/--");
+                mvaddstr(12, 72 + 9 * i, " "); printw("-");
+            }
         }
 
         delta_time -= TIME_PER_TURN;
@@ -106,6 +335,7 @@ void server_main_loop(int server_socket_fd)
 
     pthread_join(timer_thread, NULL);
     pthread_join(keyboard_handler_thread, NULL);
+    pthread_join(server_acceptance_thread, NULL);
 
     endwin();
 }

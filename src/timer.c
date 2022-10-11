@@ -11,8 +11,8 @@ void *timer(void *arguments)
         return NULL;
     }
 
-    TIMER_ARGS *args = (TIMER_ARGS *)arguments;
-    if (args->delta_time == NULL || args->running == NULL)
+    TIMER_ARGS args = *(TIMER_ARGS *)arguments;
+    if (args.delta_time == NULL || args.running == NULL)
     {
         return NULL;
     }
@@ -20,12 +20,12 @@ void *timer(void *arguments)
     struct timeval last_update, now;
     gettimeofday(&last_update, NULL);
 
-    while (*args->running)
+    while (*args.running)
     {
         nanosleep((const struct timespec[]){{0, 1000000L}}, NULL);
 
         gettimeofday(&now, NULL);
-        *args->delta_time += ((now.tv_sec - last_update.tv_sec) * 1000) + ((now.tv_usec - last_update.tv_usec) / 1000);
+        *args.delta_time += ((now.tv_sec - last_update.tv_sec) * 1000) + ((now.tv_usec - last_update.tv_usec) / 1000);
         last_update = now;
     }
 

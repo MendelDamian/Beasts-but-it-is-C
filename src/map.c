@@ -118,48 +118,81 @@ void map_draw(MAP *map, uint8_t x_offset, uint8_t y_offset)
     }
 }
 
-char tile2char(TILE tile)
+void map_draw_chunk(MAP_CHUNK *chunk, uint8_t x_offset, uint8_t y_offset)
 {
-    switch (tile)
+    if (chunk == NULL)
     {
-        case TILE_EMPTY:
-            return ' ';
-        case TILE_WALL:
-            return 'W';
-        case TILE_BUSH:
-            return 'x';
-        case TILE_CAMPSITE:
-            return 'A';
-        case TILE_SINGLE_COIN:
-            return 'c';
-        case TILE_TREASURE:
-            return 't';
-        case TILE_LARGE_TREASURE:
-            return 'T';
-        default:
-            return tile2char(TILE_EMPTY);
+        return;
+    }
+
+    for (uint8_t i = 0; i < chunk->height; ++i)
+    {
+        for (uint8_t j = 0; j < chunk->width; ++j)
+        {
+            uint8_t x = x_offset + j + chunk->position.x - chunk->width / 2;
+            uint8_t y = y_offset + i + chunk->position.y - chunk->height / 2;
+
+            enum color_pair_t color = PAIR_DEFAULT;
+
+            switch (chunk->tiles[i][j])
+            {
+                default:
+                case TILE_EMPTY:
+                    color = COLOR_PAIR(PAIR_EMPTY);
+                    break;
+
+                case TILE_WALL:
+                    color = COLOR_PAIR(PAIR_WALL);
+                    break;
+
+                case TILE_BUSH:
+                    color = COLOR_PAIR(PAIR_BUSH);
+                    break;
+
+                case TILE_CAMPSITE:
+                    color = COLOR_PAIR(PAIR_CAMPSITE);
+                    break;
+
+                case TILE_TREASURE:
+                case TILE_LARGE_TREASURE:
+                case TILE_SINGLE_COIN:
+                    color = COLOR_PAIR(PAIR_COIN);
+                    break;
+            }
+
+            attron(color);
+            mvaddch(y, x, chunk->tiles[i][j]);
+            attroff(color);
+        }
     }
 }
 
-TILE char2tile(char c)
+void map_get_chunk(MAP *map, MAP_CHUNK *chunk, COORDS position)
 {
-    switch (c)
+    if (map == NULL || chunk == NULL)
     {
-        case ' ':
-            return TILE_EMPTY;
-        case 'W':
-            return TILE_WALL;
-        case 'x':
-            return TILE_BUSH;
-        case 'A':
-            return TILE_CAMPSITE;
-        case 'c':
-            return TILE_SINGLE_COIN;
-        case 't':
-            return TILE_TREASURE;
-        case 'T':
-            return TILE_LARGE_TREASURE;
-        default:
-            return char2tile(' ');
+        return;
+    }
+
+    chunk->position = position;
+    chunk->width = MAP_CHUNK_WIDTH;
+    chunk->height = MAP_CHUNK_HEIGHT;
+
+    for (uint8_t i = 0; i < chunk->height; ++i)
+    {
+        for (uint8_t j = 0; j < chunk->width; ++j)
+        {
+            uint8_t x = chunk->position.x + j - (chunk->width / 2);
+            uint8_t y = chunk->position.y + i - (chunk->height / 2);
+
+            if (x >= map->width || y >= map->height)
+            {
+                chunk->tiles[i][j] = TILE_EMPTY;
+            }
+            else
+            {
+                chunk->tiles[i][j] = map->tiles[y][x];
+            }
+        }
     }
 }
