@@ -36,7 +36,7 @@ typedef struct player_t
 } PLAYER;
 
 void player_init(PLAYER *player, COORDS position, PLAYER_TYPE type);
-void player_draw(PLAYER *player, uint8_t x_offset, uint8_t y_offset);
+void player_draw(PLAYER *player);
 void player_die(PLAYER *player);
 
 #endif //PLAYER_H

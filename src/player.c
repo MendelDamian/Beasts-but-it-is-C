@@ -22,7 +22,7 @@ void player_init(PLAYER *player, COORDS position, PLAYER_TYPE type)
     player->type = type;
 }
 
-void player_draw(PLAYER *player, uint8_t x_offset, uint8_t y_offset)
+void player_draw(PLAYER *player)
 {
     if (player == NULL)
     {
@@ -31,7 +31,7 @@ void player_draw(PLAYER *player, uint8_t x_offset, uint8_t y_offset)
 
     attron(COLOR_PAIR(PAIR_PLAYER));
 
-    mvaddch(player->position.y + y_offset, player->position.x + x_offset, player->number + '0');
+    mvaddch(player->position.y + INTERFACE_OFFSET_Y, player->position.x + INTERFACE_OFFSET_X, player->number + '0');
 
     attroff(COLOR_PAIR(PAIR_PLAYER));
 }

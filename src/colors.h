@@ -5,6 +5,7 @@ enum color_pair_t
 {
     PAIR_DEFAULT,
     PAIR_PLAYER,
+    PAIR_BEAST,
     PAIR_COIN,
     PAIR_CAMPSITE,
     PAIR_BUSH,

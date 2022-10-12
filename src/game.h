@@ -9,7 +9,6 @@ typedef struct game_t
 {
     int server_socket_fd;
     int server_pid;
-    MAP map;
     uint32_t turns;
 } GAME;
 

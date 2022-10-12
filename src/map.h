@@ -17,9 +17,11 @@ typedef enum tile_t
     TILE_WALL = 'W',
     TILE_BUSH = '#',
     TILE_CAMPSITE = 'A',
-    TILE_SINGLE_COIN = 'c',
+    TILE_COIN = 'c',
     TILE_TREASURE = 't',
     TILE_LARGE_TREASURE = 'T',
+    TILE_DROPPED_TREASURE = 'D',
+    TILE_BEAST = '*',
 } TILE;
 
 typedef struct map_t
@@ -39,8 +41,8 @@ typedef struct map_chunk_t
 
 void map_init(MAP *map);
 int map_load(MAP *map, const char *filename);
-void map_draw(MAP *map, uint8_t x_offset, uint8_t y_offset);
-void map_draw_chunk(MAP_CHUNK *chunk, uint8_t x_offset, uint8_t y_offset);
+void map_draw(MAP *map);
+void map_draw_chunk(MAP_CHUNK *chunk);
 void map_get_chunk(MAP *map, MAP_CHUNK *chunk, COORDS position);
 
 #endif //MAP_H

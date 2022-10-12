@@ -15,6 +15,7 @@ typedef struct packet_data_t
 typedef struct packet_data_response_t
 {
     int pid;  // PID of the server's process.
+    uint8_t number;  // Number of the player.
     MAP_CHUNK chunk;  // Chunk of the map.
     uint32_t turns;  // Number of turns.
     uint16_t carried_coins;  // Number of coins carried by the player.

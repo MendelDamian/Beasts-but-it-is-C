@@ -16,6 +16,8 @@ int map_load(MAP *map, const char *filename)
         return 1;
     }
 
+    map_init(map);
+
     FILE *f = fopen(filename, "r");
     if (f == NULL)
     {
@@ -69,7 +71,7 @@ int map_load(MAP *map, const char *filename)
     return 0;
 }
 
-void map_draw(MAP *map, uint8_t x_offset, uint8_t y_offset)
+void map_draw(MAP *map)
 {
     if (map == NULL)
     {
@@ -80,8 +82,8 @@ void map_draw(MAP *map, uint8_t x_offset, uint8_t y_offset)
     {
         for (uint8_t j = 0; j < map->width; ++j)
         {
-            uint8_t x = x_offset + j;
-            uint8_t y = y_offset + i;
+            uint8_t x = INTERFACE_OFFSET_X + j;
+            uint8_t y = INTERFACE_OFFSET_Y + i;
 
             enum color_pair_t color = PAIR_DEFAULT;
 
@@ -106,7 +108,7 @@ void map_draw(MAP *map, uint8_t x_offset, uint8_t y_offset)
 
                 case TILE_TREASURE:
                 case TILE_LARGE_TREASURE:
-                case TILE_SINGLE_COIN:
+                case TILE_COIN:
                     color = COLOR_PAIR(PAIR_COIN);
                     break;
             }
@@ -118,7 +120,7 @@ void map_draw(MAP *map, uint8_t x_offset, uint8_t y_offset)
     }
 }
 
-void map_draw_chunk(MAP_CHUNK *chunk, uint8_t x_offset, uint8_t y_offset)
+void map_draw_chunk(MAP_CHUNK *chunk)
 {
     if (chunk == NULL)
     {
@@ -129,8 +131,8 @@ void map_draw_chunk(MAP_CHUNK *chunk, uint8_t x_offset, uint8_t y_offset)
     {
         for (uint8_t j = 0; j < chunk->width; ++j)
         {
-            uint8_t x = x_offset + j + chunk->position.x - chunk->width / 2;
-            uint8_t y = y_offset + i + chunk->position.y - chunk->height / 2;
+            uint8_t x = INTERFACE_OFFSET_X + j + chunk->position.x - chunk->width / 2;
+            uint8_t y = INTERFACE_OFFSET_Y + i + chunk->position.y - chunk->height / 2;
 
             enum color_pair_t color = PAIR_DEFAULT;
 
@@ -155,7 +157,7 @@ void map_draw_chunk(MAP_CHUNK *chunk, uint8_t x_offset, uint8_t y_offset)
 
                 case TILE_TREASURE:
                 case TILE_LARGE_TREASURE:
-                case TILE_SINGLE_COIN:
+                case TILE_COIN:
                     color = COLOR_PAIR(PAIR_COIN);
                     break;
             }

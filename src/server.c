@@ -13,6 +13,7 @@
 #include "keyboard_handler.h"
 #include "coordinate.h"
 #include "packets.h"
+#include "screen.h"
 
 typedef struct on_key_pressed_args_t
 {
@@ -166,12 +167,13 @@ void *server_player_handler(void *arguments)
         }
 
         args.player->pid = packet_data.pid;
-        player_move(args.player, packet_data.direction, &args.game->map);
+        player_move(args.player, packet_data.direction, &args.server->map);
 
         MAP_CHUNK chunk;
-        map_get_chunk(&args.game->map, &chunk, args.player->position);
+        map_get_chunk(&args.server->map, &chunk, args.player->position);
         PACKET_DATA_RESPONSE packet_data_response = {
             .pid = args.game->server_pid,
+            .number = args.player->number,
             .chunk = chunk,
             .turns = args.game->turns,
             .carried_coins = args.player->carried_coins,
@@ -216,7 +218,7 @@ void *server_acceptance(void *arguments)
             continue;
         }
 
-        player_init(player, find_spot_for_player(&args.game->map, args.server), HUMAN);
+        player_init(player, find_spot_for_player(&args.server->map, args.server), HUMAN);
         player->socket_fd = client_socket;
 
         SERVER_PLAYER_HANDLER_ARGS player_handler_args = {
@@ -233,19 +235,10 @@ void *server_acceptance(void *arguments)
 
 void server_main_loop(int server_socket_fd)
 {
-    bool running = true;
     double delta_time = TIME_PER_TURN;
+    bool running = true;
 
-    initscr();
-    start_color();
-    noecho();
-    keypad(stdscr, TRUE);
-    cbreak();
-    curs_set(0);
-    refresh();
-    timeout(0);
-
-    colors_init();
+    screen_init();
 
     SERVER server;
     server_init(&server);
@@ -255,7 +248,7 @@ void server_main_loop(int server_socket_fd)
     game.server_pid = getpid();
     game.server_socket_fd = server_socket_fd;
 
-    if (map_load(&game.map, MAP_FILE))
+    if (map_load(&server.map, MAP_FILE))
     {
         perror("ERROR on map_load");
         return;
@@ -292,40 +285,7 @@ void server_main_loop(int server_socket_fd)
             continue;
         }
 
-//        clear();
-        map_draw(&game.map, 5, 2);
-
-        mvaddstr(3, 60, "Server's PID: "); printw("%d", game.server_pid);
-        mvaddstr(4, 61, "Campsite X/Y: "); printw("%hhu/%hhu", 23, 11);
-        mvaddstr(5, 61, "Round number: "); printw("%u", game.turns);
-
-        mvaddstr(8, 60, "Players: "); printw("%hhu", server.number_of_players);
-        mvaddstr(9, 61, "PID");
-        mvaddstr(10, 61, "Type");
-        mvaddstr(11, 61, "Curr X/Y");
-        mvaddstr(12, 61, "Deaths");
-
-        for (int i = 0; i < MAX_PLAYERS; i++)
-        {
-            PLAYER *player = &server.players[i];
-            mvaddstr(8, 72 + 9 * i, " "); printw("Player%d", i + 1);
-            if (player->pid)
-            {
-                mvaddstr(9, 72 + 9 * i, " "); printw("%d       ", player->pid);
-                mvaddstr(10, 72 + 9 * i, " "); printw("%s  ", player->type == HUMAN ? "Human" : "CPU");
-                mvaddstr(11, 72 + 9 * i, " "); printw("%02hhu/%02hhu", player->position.x, player->position.y);
-                mvaddstr(12, 72 + 9 * i, " "); printw("%hhu", player->deaths);
-
-                player_draw(player, 5, 2);
-            }
-            else
-            {
-                mvaddstr(9, 72 + 9 * i, " "); printw("-");
-                mvaddstr(10, 72 + 9 * i, " "); printw("-");
-                mvaddstr(11, 72 + 9 * i, " "); printw("--/--");
-                mvaddstr(12, 72 + 9 * i, " "); printw("-");
-            }
-        }
+        draw_server_interface(&server, &game);
 
         delta_time -= TIME_PER_TURN;
         game.turns++;

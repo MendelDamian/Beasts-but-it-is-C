@@ -1,3 +1,4 @@
+#define _DEFAULT_SOURCE  // To delete compiler's warning.
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>

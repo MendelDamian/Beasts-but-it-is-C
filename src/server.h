@@ -12,6 +12,7 @@ typedef struct server_t
 {
     uint8_t number_of_players;
     PLAYER players[MAX_PLAYERS];
+    MAP map;
 } SERVER;
 
 void server_init(SERVER *server);
