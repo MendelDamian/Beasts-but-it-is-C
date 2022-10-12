@@ -1,14 +1,8 @@
 #ifndef TIMER_H
 #define TIMER_H
 
-#include <stdbool.h>
+#include <sys/time.h>
 
-typedef struct timer_args_t
-{
-    double *delta_time;
-    bool *running;
-} TIMER_ARGS;
-
-void *timer(void *arguments);
+void update_timer(double *delta_time, struct timeval *last_update);
 
 #endif //TIMER_H

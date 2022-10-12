@@ -3,22 +3,15 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
 #include <stdlib.h>
 
 #include "conf.h"
 #include "server.h"
 #include "game.h"
 #include "timer.h"
-#include "keyboard_handler.h"
 #include "coordinate.h"
 #include "packets.h"
 #include "screen.h"
-
-typedef struct on_key_pressed_args_t
-{
-    bool *running;
-} ON_KEY_PRESSED_ARGS;
 
 typedef struct server_acceptance_args_t
 {
@@ -44,6 +37,51 @@ void server_init(SERVER *server)
 
     server->number_of_players = 0;
     memset(server->players, 0, sizeof(server->players));
+}
+
+void player_move(PLAYER *player, DIRECTION direction, MAP *map)
+{
+    if (player == NULL)
+    {
+        return;
+    }
+
+    player->direction = direction;
+
+    switch (direction)
+    {
+        case NORTH:
+            if (map->tiles[player->position.y - 1][player->position.x] != TILE_WALL)
+            {
+                player->position.y--;
+            }
+            break;
+
+        case SOUTH:
+            if (map->tiles[player->position.y + 1][player->position.x] != TILE_WALL)
+            {
+                player->position.y++;
+            }
+            break;
+
+        case WEST:
+            if (map->tiles[player->position.y][player->position.x - 1] != TILE_WALL)
+            {
+                player->position.x--;
+            }
+            break;
+
+        case EAST:
+            if (map->tiles[player->position.y][player->position.x + 1] != TILE_WALL)
+            {
+                player->position.x++;
+            }
+            break;
+
+        default:
+        case NONE:
+            break;
+    }
 }
 
 PLAYER *server_add_player(SERVER *server)
@@ -121,23 +159,22 @@ COORDS find_spot_for_player(MAP *map, SERVER *server)
     }
 }
 
-void on_key_pressed(char key, void *arguments)
+static void on_key_pressed(char key, bool *running)
 {
-    if (arguments == NULL)
+    if (running == NULL)
     {
         return;
     }
 
-    ON_KEY_PRESSED_ARGS *args = (ON_KEY_PRESSED_ARGS *)arguments;
-
-    if (args->running == NULL)
+    switch (key)
     {
-        return;
-    }
+        case 'Q':
+        case 'q':
+            *running = false;
+            break;
 
-    if (key == 'q' || key == 'Q')
-    {
-        *args->running = false;
+        default:
+            break;
     }
 }
 
@@ -237,6 +274,8 @@ void server_main_loop(int server_socket_fd)
 {
     double delta_time = TIME_PER_TURN;
     bool running = true;
+    struct timeval last_update;
+    gettimeofday(&last_update, NULL);
 
     screen_init();
 
@@ -254,19 +293,6 @@ void server_main_loop(int server_socket_fd)
         return;
     }
 
-    pthread_t timer_thread;
-    TIMER_ARGS timer_args = { &delta_time, &running };
-    pthread_create(&timer_thread, NULL, timer, (void *)&timer_args);
-
-    pthread_t keyboard_handler_thread;
-    ON_KEY_PRESSED_ARGS on_key_pressed_args = { &running };
-    KEYBOARD_HANDLER_ARGS keyboard_handler_args = {
-            &on_key_pressed,
-            &on_key_pressed_args,
-            &running
-    };
-    pthread_create(&keyboard_handler_thread, NULL, keyboard_handler, (void *)&keyboard_handler_args);
-
     pthread_t server_acceptance_thread;
     SERVER_ACCEPTANCE_ARGS server_acceptance_args = {
         .running = &running,
@@ -276,10 +302,12 @@ void server_main_loop(int server_socket_fd)
     pthread_create(&server_acceptance_thread, NULL, server_acceptance, (void *)&server_acceptance_args);
     pthread_detach(server_acceptance_thread);
 
-    attron(COLOR_PAIR(PAIR_DEFAULT));
-
     while (running)
     {
+        char key = getch();
+        on_key_pressed(key, &running);
+        update_timer(&delta_time, &last_update);
+
         if (delta_time < TIME_PER_TURN)
         {
             continue;
@@ -291,56 +319,7 @@ void server_main_loop(int server_socket_fd)
         game.turns++;
     }
 
-    attroff(COLOR_PAIR(PAIR_DEFAULT));
-
-    pthread_join(timer_thread, NULL);
-    pthread_join(keyboard_handler_thread, NULL);
     pthread_join(server_acceptance_thread, NULL);
 
     endwin();
-}
-
-void player_move(PLAYER *player, DIRECTION direction, MAP *map)
-{
-    if (player == NULL)
-    {
-        return;
-    }
-
-    player->direction = direction;
-
-    switch (direction)
-    {
-        case NORTH:
-            if (map->tiles[player->position.y - 1][player->position.x] != TILE_WALL)
-            {
-                player->position.y--;
-            }
-            break;
-
-        case SOUTH:
-            if (map->tiles[player->position.y + 1][player->position.x] != TILE_WALL)
-            {
-                player->position.y++;
-            }
-            break;
-
-        case WEST:
-            if (map->tiles[player->position.y][player->position.x - 1] != TILE_WALL)
-            {
-                player->position.x--;
-            }
-            break;
-
-        case EAST:
-            if (map->tiles[player->position.y][player->position.x + 1] != TILE_WALL)
-            {
-                player->position.x++;
-            }
-            break;
-
-        default:
-        case NONE:
-            break;
-    }
 }

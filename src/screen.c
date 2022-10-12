@@ -9,7 +9,7 @@ void screen_init(void)
     cbreak();
     curs_set(0);
     refresh();
-    timeout(0);
+    timeout(50);
 
     colors_init();
 }

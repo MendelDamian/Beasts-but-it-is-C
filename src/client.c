@@ -1,57 +1,46 @@
-#include <sys/types.h>
+#include <sys/time.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
-#include <pthread.h>
 #include <unistd.h>
 
 #include "client.h"
 #include "game.h"
 #include "player.h"
 #include "timer.h"
-#include "keyboard_handler.h"
 #include "packets.h"
 #include "screen.h"
 
-typedef struct on_key_pressed_args_t
+static void on_key_pressed(char key, bool *running, PLAYER *player)
 {
-    bool *running;
-    PLAYER *player;
-} ON_KEY_PRESSED_ARGS;
-
-static void on_key_pressed(char key, void *arguments)
-{
-    if (arguments == NULL)
-    {
-        return;
-    }
-
-    ON_KEY_PRESSED_ARGS args = *(ON_KEY_PRESSED_ARGS *)arguments;
-
-    if (args.running == NULL || args.player == NULL)
+    if (running == NULL || player == NULL)
     {
         return;
     }
 
     switch (key)
     {
+        case 'Q':
         case 'q':
-            *args.running = false;
+            *running = false;
             break;
 
+        case 'W':
         case 'w':
-            args.player->direction = NORTH;
+            player->direction = NORTH;
             break;
 
+        case 'A':
         case 'a':
-            args.player->direction = WEST;
+            player->direction = WEST;
             break;
 
+        case 'S':
         case 's':
-            args.player->direction = SOUTH;
+            player->direction = SOUTH;
             break;
 
+        case 'D':
         case 'd':
-            args.player->direction = EAST;
+            player->direction = EAST;
             break;
 
         default:
@@ -99,6 +88,8 @@ void client_main_loop(int sock_fd)
 {
     double delta_time = TIME_PER_TURN;
     bool running = true;
+    struct timeval last_update;
+    gettimeofday(&last_update, NULL);
 
     screen_init();
 
@@ -108,21 +99,15 @@ void client_main_loop(int sock_fd)
     game.server_socket_fd = sock_fd;
 
     MAP_CHUNK chunk;
-
     PLAYER player;
     player.pid = getpid();
 
-    pthread_t timer_thread;
-    TIMER_ARGS timer_args = { &delta_time, &running };
-    pthread_create(&timer_thread, NULL, timer, (void *)&timer_args);
-
-    pthread_t keyboard_handler_thread;
-    ON_KEY_PRESSED_ARGS on_key_pressed_args = { &running, &player };
-    KEYBOARD_HANDLER_ARGS keyboard_handler_args = { &on_key_pressed, &on_key_pressed_args, &running };
-    pthread_create(&keyboard_handler_thread, NULL, keyboard_handler, (void *)&keyboard_handler_args);
-
     while (running)
     {
+        char key = getch();
+        on_key_pressed(key, &running, &player);
+        update_timer(&delta_time, &last_update);
+
         if (delta_time < TIME_PER_TURN)
         {
             continue;
@@ -140,9 +125,6 @@ void client_main_loop(int sock_fd)
         delta_time -= TIME_PER_TURN;
         game.turns++;
     }
-
-    pthread_join(timer_thread, NULL);
-    pthread_join(keyboard_handler_thread, NULL);
 
     endwin();
 }
