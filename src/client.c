@@ -112,6 +112,7 @@ void *client_listener(void *arguments)
                 entity->deaths = packet.server_game_data.deaths;
                 entity->carried_coins = packet.server_game_data.carried_coins;
                 entity->brought_coins = packet.server_game_data.brought_coins;
+                // TODO: extract campsite's position from chunk.
 
                 entity->direction = NONE;
                 break;

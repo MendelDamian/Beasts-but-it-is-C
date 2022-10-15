@@ -32,8 +32,7 @@ void server_init(SERVER *server)
     server->dropped_treasures = dll_create(sizeof(TREASURE));
     map_init(&server->map);
     game_init(&server->game);
-    server->game.campsite = (COORDS){ 11, 23 };
-    // TODO: Set campsite coords in game struct.
+    server->game.campsite = (COORDS){ 0, 0 };
 }
 
 static void prepare_map_chunk(SERVER *server, MAP_CHUNK *chunk)
@@ -256,8 +255,11 @@ void *handle_game_state(SERVER *server)
             uint32_t total_coins = entity->carried_coins + other_entity->carried_coins;
 
             entity->position = entity->spawn_point;
+            entity->deaths++;
+
             if (other_entity->type != ENTITY_TYPE_BEAST)
             {
+                other_entity->deaths++;
                 other_entity->position = other_entity->spawn_point;
             }
 
@@ -480,7 +482,7 @@ void server_main_loop(int server_socket_fd)
     server.game.server_pid = getpid();
     server.game.server_socket_fd = server_socket_fd;
 
-    if (map_load(&server.map, MAP_FILE))
+    if (map_load(&server.map, MAP_FILE, &server.game.campsite))
     {
         perror("ERROR on map_load");
         return;

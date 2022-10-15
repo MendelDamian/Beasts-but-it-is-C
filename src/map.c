@@ -8,11 +8,11 @@ void map_init(MAP *map)
     memset(map, 0, sizeof(MAP));
 }
 
-int map_load(MAP *map, const char *filename)
+int map_load(MAP *map, const char *filename, COORDS *campsite_position)
 {
-    if (map == NULL || filename == NULL)
+    if (map == NULL || filename == NULL || campsite_position == NULL)
     {
-        return 1;
+        return -1;
     }
 
     map_init(map);
@@ -44,6 +44,11 @@ int map_load(MAP *map, const char *filename)
             }
 
             map->tiles[y][x] = line[x];
+            if (map->tiles[y][x] == TILE_CAMPSITE)
+            {
+                campsite_position->x = x;
+                campsite_position->y = y;
+            }
             x++;
         }
 

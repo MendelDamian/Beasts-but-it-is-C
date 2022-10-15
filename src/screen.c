@@ -21,7 +21,14 @@ void draw_server_info(GAME *game)
     move(SIDEBAR_OFFSET_Y + y, SIDEBAR_OFFSET_X);
     printw("Server's PID:  %d", game->server_pid);
     move(SIDEBAR_OFFSET_Y + y + 1, SIDEBAR_OFFSET_X + x);
-    printw("Campsite X/Y: %02hhu/%02hhu", 23, 11);
+    if (game->campsite.x == 0 && game->campsite.y == 0)
+    {
+        printw("Campsite X/Y: unknown", game->campsite.x, game->campsite.y);
+    }
+    else
+    {
+        printw("Campsite X/Y: %02hhu/%02hhu  ", game->campsite.x, game->campsite.y);
+    }
     move(SIDEBAR_OFFSET_Y + y + 2, SIDEBAR_OFFSET_X + x);
     printw("Round number: %u", game->turns);
 }
