@@ -8,7 +8,6 @@ void screen_init(void)
     keypad(stdscr, TRUE);
     cbreak();
     curs_set(0);
-    refresh();
     timeout(50);
 
     colors_init();
@@ -90,9 +89,9 @@ void draw_legend()
     printw("    - campsite");
 }
 
-void draw_server_interface(SERVER *server, GAME *game)
+void draw_server_interface(SERVER *server)
 {
-    if (server == NULL || game == NULL)
+    if (server == NULL)
     {
         return;
     }
@@ -101,7 +100,7 @@ void draw_server_interface(SERVER *server, GAME *game)
     map_draw(&server->map);
 
     // Draw sidebar's server info.
-    draw_server_info(game);
+    draw_server_info(&server->game);
 
     // Draw sidebar's players section.
     uint8_t y = 5;
@@ -125,66 +124,50 @@ void draw_server_interface(SERVER *server, GAME *game)
     move(SIDEBAR_OFFSET_Y + y + 8, SIDEBAR_OFFSET_X + x + 5);
     printw("brought");
 
-    for (int i = 0; i < MAX_PLAYERS; ++i)
+    NODE *node = server->entities->head;
+    while (node)
     {
-        PLAYER *player = &server->players[i];
-
-        // Draw on sidebar.
-        x = 15 + 10 * i;
-        move(SIDEBAR_OFFSET_Y + y, SIDEBAR_OFFSET_X + x);
-        printw("Player %d", player->number);
-
-        if (server->players[i].pid != 0)  // Or -1.
+        ENTITY *entity = (ENTITY *)node->item;
+        if (entity->type != ENTITY_TYPE_BEAST)
         {
+            // Draw on sidebar.
+            x = 15 + 10 * (entity->number - 1);
+            move(SIDEBAR_OFFSET_Y + y, SIDEBAR_OFFSET_X + x);
+            printw("Player %d", entity->number);
+
             // Draw on map.
-            player_draw(player);
+            draw_entity(entity);
 
             move(SIDEBAR_OFFSET_Y + y + 1, SIDEBAR_OFFSET_X + x);
-            printw("%d", player->pid);
+            printw("%d", entity->pid);
             move(SIDEBAR_OFFSET_Y + y + 2, SIDEBAR_OFFSET_X + x);
-            printw("%s", player->type == HUMAN ? "HUMAN" : "CPU");
+            printw("%s", get_entity_type_name(entity->type));
             move(SIDEBAR_OFFSET_Y + y + 3, SIDEBAR_OFFSET_X + x);
-            printw("%02hhu/%02hhu", player->position.x, player->position.y);
+            printw("%02hhu/%02hhu", entity->position.x, entity->position.y);
             move(SIDEBAR_OFFSET_Y + y + 4, SIDEBAR_OFFSET_X + x);
-            printw("%hhu", player->deaths);
+            printw("%hhu", entity->deaths);
             move(SIDEBAR_OFFSET_Y + y + 7, SIDEBAR_OFFSET_X + x);
-            printw("%hu", player->carried_coins);
+            printw("%hu", entity->carried_coins);
             move(SIDEBAR_OFFSET_Y + y + 8, SIDEBAR_OFFSET_X + x);
-            printw("%hu", player->brought_coins);
-        }
-        else
-        {
-            move(SIDEBAR_OFFSET_Y + y + 1, SIDEBAR_OFFSET_X + x);
-            printw("-         ");
-            move(SIDEBAR_OFFSET_Y + y + 2, SIDEBAR_OFFSET_X + x);
-            printw("-         ");
-            move(SIDEBAR_OFFSET_Y + y + 3, SIDEBAR_OFFSET_X + x);
-            printw("--/--     ");
-            move(SIDEBAR_OFFSET_Y + y + 4, SIDEBAR_OFFSET_X + x);
-            printw("-         ");
-            move(SIDEBAR_OFFSET_Y + y + 7, SIDEBAR_OFFSET_X + x);
-            printw("          ");
-            move(SIDEBAR_OFFSET_Y + y + 8, SIDEBAR_OFFSET_X + x);
-            printw("          ");
-        }
+            printw("%hu", entity->brought_coins);
+            }
+
+        node = node->next;
     }
 
     // Draw legend.
     draw_legend();
 }
 
-void draw_client_interface(MAP_CHUNK *map_chunk, GAME *game, PLAYER *player)
+void draw_client_interface(MAP_CHUNK *map_chunk, GAME *game, ENTITY *entity)
 {
-    if (map_chunk == NULL || game == NULL || player == NULL)
+    if (map_chunk == NULL || game == NULL || entity == NULL)
     {
         return;
     }
 
     // Draw map.
     map_draw_chunk(map_chunk);
-
-    // Draw player.
-    player_draw(player);
 
     // Draw sidebar's server info.
     draw_server_info(game);
@@ -207,22 +190,22 @@ void draw_client_interface(MAP_CHUNK *map_chunk, GAME *game, PLAYER *player)
     // Draw on sidebar.
     x = 15;
     move(SIDEBAR_OFFSET_Y + y + 1, SIDEBAR_OFFSET_X + x);
-    printw("%d", player->number);
+    printw("%d", entity->number);
     move(SIDEBAR_OFFSET_Y + y + 2, SIDEBAR_OFFSET_X + x);
-    printw("%s", player->type == HUMAN ? "HUMAN" : "CPU");
+    printw("%s", get_entity_type_name(entity->type));
     move(SIDEBAR_OFFSET_Y + y + 3, SIDEBAR_OFFSET_X + x);
-    printw("%02hhu/%02hhu", player->position.x, player->position.y);
+    printw("%02hhu/%02hhu", entity->position.x, entity->position.y);
     move(SIDEBAR_OFFSET_Y + y + 4, SIDEBAR_OFFSET_X + x);
-    printw("%hhu", player->deaths);
+    printw("%hhu", entity->deaths);
 
     // Draw coin info.
     y = 11;
     x = 0;
 
     move(SIDEBAR_OFFSET_Y + y, SIDEBAR_OFFSET_X + x);
-    printw("Coins found:   %d", player->carried_coins + player->brought_coins);
+    printw("Coins found:   %d", entity->carried_coins + entity->brought_coins);
     move(SIDEBAR_OFFSET_Y + y + 1, SIDEBAR_OFFSET_X + x);
-    printw("Coins brought: %d", player->brought_coins);
+    printw("Coins brought: %d", entity->brought_coins);
 
     // Draw legend.
     draw_legend();

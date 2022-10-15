@@ -4,29 +4,20 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
-#include "conf.h"
 #include "server.h"
-#include "game.h"
+#include "network_protocol.h"
 #include "timer.h"
-#include "coordinate.h"
-#include "packets.h"
 #include "screen.h"
 
-typedef struct server_acceptance_args_t
-{
-    bool *running;
-    GAME *game;
-    SERVER *server;
-} SERVER_ACCEPTANCE_ARGS;
+pthread_mutex_t game_state_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-typedef struct server_player_handler_args_t
+typedef struct server_entity_handler_args_t
 {
-    bool *running;
-    GAME *game;
+    ENTITY *entity;
     SERVER *server;
-    PLAYER *player;
-} SERVER_PLAYER_HANDLER_ARGS;
+} SERVER_ENTITY_HANDLER_ARGS;
 
 void server_init(SERVER *server)
 {
@@ -36,127 +27,137 @@ void server_init(SERVER *server)
     }
 
     server->number_of_players = 0;
-    memset(server->players, 0, sizeof(server->players));
+    server->number_of_beasts = 0;
+    server->entities = dll_create(sizeof(ENTITY));
+    server->dropped_treasures = dll_create(sizeof(TREASURE));
+    map_init(&server->map);
+    game_init(&server->game);
+    server->game.campsite = (COORDS){ 11, 23 };
+    // TODO: Set campsite coords in game struct.
 }
 
-void player_move(PLAYER *player, DIRECTION direction, MAP *map)
+static void prepare_map_chunk(SERVER *server, MAP_CHUNK *chunk)
 {
-    if (player == NULL)
+    if (server == NULL || chunk == NULL)
     {
         return;
     }
 
-    player->direction = direction;
+    uint8_t begin_x = chunk->position.x - (chunk->width / 2);
+    uint8_t begin_y = chunk->position.y - (chunk->height / 2);
 
-    switch (direction)
+    uint8_t end_x = chunk->position.x + (chunk->width / 2);
+    uint8_t end_y = chunk->position.y + (chunk->height / 2);
+
+    NODE *node = server->entities->head;
+    while (node)
     {
-        case NORTH:
-            if (map->tiles[player->position.y - 1][player->position.x] != TILE_WALL)
+        ENTITY *entity = node->item;
+        if (entity->position.x >= begin_x && entity->position.x <= end_x
+            && entity->position.y >= begin_y && entity->position.y <= end_y)
+        {
+            switch (entity->type)
             {
-                player->position.y--;
+                case ENTITY_TYPE_PLAYER:
+                case ENTITY_TYPE_BOT:
+                    chunk->tiles[entity->position.y - begin_y][entity->position.x - begin_x] = (char)(entity->number + '0');
+                    break;
+
+                case ENTITY_TYPE_BEAST:
+                    chunk->tiles[entity->position.y - begin_y][entity->position.x - begin_x] = TILE_BEAST;
+                    break;
+
+                default:
+                    break;
             }
+        }
+        node = node->next;
+    }
+}
+
+static ENTITY *server_add_entity(SERVER *server)
+{
+    if (server == NULL)
+    {
+        return NULL;
+    }
+
+    return dll_push_back(server->entities);
+}
+
+static void server_remove_entity(SERVER *server, ENTITY *entity)
+{
+    if (server == NULL || entity == NULL)
+    {
+        return;
+    }
+
+    switch (entity->type)
+    {
+        case ENTITY_TYPE_BOT:
+        case ENTITY_TYPE_PLAYER:
+            server->number_of_players--;
             break;
 
-        case SOUTH:
-            if (map->tiles[player->position.y + 1][player->position.x] != TILE_WALL)
-            {
-                player->position.y++;
-            }
-            break;
-
-        case WEST:
-            if (map->tiles[player->position.y][player->position.x - 1] != TILE_WALL)
-            {
-                player->position.x--;
-            }
-            break;
-
-        case EAST:
-            if (map->tiles[player->position.y][player->position.x + 1] != TILE_WALL)
-            {
-                player->position.x++;
-            }
+        case ENTITY_TYPE_BEAST:
+            server->number_of_beasts--;
             break;
 
         default:
-        case NONE:
             break;
     }
+
+    dll_remove(server->entities, entity);
 }
 
-PLAYER *server_add_player(SERVER *server)
+static TREASURE *server_add_treasure(SERVER *server, COORDS coords, uint16_t coins)
 {
     if (server == NULL)
     {
         return NULL;
     }
 
-    if (server->number_of_players >= MAX_PLAYERS)
-    {
-        return NULL;
-    }
-
-    for (int i = 0; i < MAX_PLAYERS; ++i)
-    {
-        if (server->players[i].pid == 0)
-        {
-            server->number_of_players++;
-            server->players[i].number = i + 1;
-            return &server->players[i];
-        }
-    }
-
-    return NULL;
+    TREASURE *treasure = dll_push_back(server->dropped_treasures);
+    treasure->position = coords;
+    treasure->coins = coins;
+    return treasure;
 }
 
-void server_remove_player(SERVER *server, int pid)
+static void server_remove_treasure(SERVER *server, TREASURE *treasure)
 {
-    if (server == NULL)
+    if (server == NULL || treasure == NULL)
     {
         return;
     }
 
-    for (int i = 0; i < server->number_of_players; i++)
-    {
-        if (server->players[i].pid == pid)
-        {
-            memset(&server->players[i], 0, sizeof(PLAYER));
-            server->number_of_players--;
-            break;
-        }
-    }
+    server->map.tiles[treasure->position.y][treasure->position.x] = TILE_EMPTY;
+    dll_remove(server->dropped_treasures, treasure);
 }
 
-COORDS find_spot_for_player(MAP *map, SERVER *server)
+uint8_t player_get_number(DLL *entities)
 {
-    if (map == NULL || server == NULL)
+    if (entities == NULL)
     {
-        return (COORDS){-1, -1};
+        return 0;
     }
 
-    while (1)
+    uint8_t number = 1;
+    NODE *node = entities->head;
+    while (node != NULL)
     {
-        int x = rand() % map->width;
-        int y = rand() % map->height;
-
-        if (map->tiles[y][x] == TILE_EMPTY)
+        ENTITY *entity = node->item;
+        if (entity->number == number)
         {
-            bool found = false;
-            for (int i = 0; i < server->number_of_players; i++)
-            {
-                if (server->players[i].position.x == x && server->players[i].position.y == y)
-                {
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found)
-            {
-                return (COORDS){y, x};
-            }
+            number++;
+            node = entities->head;
+        }
+        else
+        {
+            node = node->next;
         }
     }
+
+    return number;
 }
 
 static void on_key_pressed(char key, bool *running)
@@ -178,93 +179,288 @@ static void on_key_pressed(char key, bool *running)
     }
 }
 
-void *server_player_handler(void *arguments)
+void *handle_game_state(SERVER *server)
 {
-    if (arguments == NULL)
+    if (server == NULL)
     {
         return NULL;
     }
 
-    SERVER_PLAYER_HANDLER_ARGS args = *(SERVER_PLAYER_HANDLER_ARGS *)arguments;
-    if (args.running == NULL || args.game == NULL || args.server == NULL || args.player == NULL)
+    NODE *node = server->entities->head;
+    while (node)
     {
-        return NULL;
-    }
+        ENTITY *entity = node->item;
 
-    while (*args.running)
-    {
-        PACKET_DATA packet_data;
-        ssize_t bytes_received = recv(args.player->socket_fd, &packet_data, sizeof(PACKET_DATA), 0);
-        if (bytes_received <= 0)
+        if (server->map.tiles[entity->position.y][entity->position.x] == TILE_BUSH && entity->stagnancy == 0)
         {
-            int socket_fd = args.player->socket_fd;
-            server_remove_player(args.server, args.player->pid);
-            close(socket_fd);
-            break;
+            // Bushes slow down the entity.
+            entity->stagnancy++;
+        }
+        else
+        {
+            // Move the entity.
+            bool moved = false;
+            switch (entity->direction)
+            {
+                case NORTH:
+                    if (server->map.tiles[entity->position.y - 1][entity->position.x] != TILE_WALL)
+                    {
+                        moved = true;
+                        entity->position.y--;
+                    }
+                    break;
+
+                case SOUTH:
+                    if (server->map.tiles[entity->position.y + 1][entity->position.x] != TILE_WALL)
+                    {
+                        moved = true;
+                        entity->position.y++;
+                    }
+                    break;
+
+                case WEST:
+                    if (server->map.tiles[entity->position.y][entity->position.x - 1] != TILE_WALL)
+                    {
+                        moved = true;
+                        entity->position.x--;
+                    }
+                    break;
+
+                case EAST:
+                    if (server->map.tiles[entity->position.y][entity->position.x + 1] != TILE_WALL)
+                    {
+                        moved = true;
+                        entity->position.x++;
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+
+            if (moved)
+            {
+                entity->stagnancy = 0;
+            }
+            else
+            {
+                entity->stagnancy++;
+            }
         }
 
-        args.player->pid = packet_data.pid;
-        player_move(args.player, packet_data.direction, &args.server->map);
+        // Check if the entity shares tile with any other entity.
+        ENTITY *other_entity = get_entity_at_coords(server->entities, entity->position);
+        if (other_entity != NULL && other_entity != entity)
+        {
+            COORDS meeting_point = entity->position;
+            uint32_t total_coins = entity->carried_coins + other_entity->carried_coins;
 
+            entity->position = entity->spawn_point;
+            if (other_entity->type != ENTITY_TYPE_BEAST)
+            {
+                other_entity->position = other_entity->spawn_point;
+            }
+
+            // Drop treasure.
+            entity->carried_coins = 0;
+            other_entity->carried_coins = 0;
+            server_add_treasure(server, meeting_point, total_coins);
+            server->map.tiles[meeting_point.y][meeting_point.x] = TILE_DROPPED_TREASURE;
+            continue;
+        }
+
+        // Check for dropped treasures.
+        TREASURE *treasure = get_treasure_at_coords(server->dropped_treasures, entity->position);
+        if (treasure != NULL)
+        {
+            entity->carried_coins += treasure->coins;
+            server_remove_treasure(server, treasure);
+            continue;
+        }
+
+        // Check if non-beast entity stands on specific block.
+        if (entity->type != ENTITY_TYPE_BEAST)
+        {
+            char stands_on = server->map.tiles[entity->position.y][entity->position.x];
+            if (stands_on == TILE_COIN)
+            {
+                entity->carried_coins += COIN_CASH;
+                server->map.tiles[entity->position.y][entity->position.x] = TILE_EMPTY;
+                continue;
+            }
+            else if (stands_on == TILE_TREASURE)
+            {
+                entity->carried_coins += TREASURE_CASH;
+                server->map.tiles[entity->position.y][entity->position.x] = TILE_EMPTY;
+                continue;
+            }
+            else if (stands_on == TILE_LARGE_TREASURE)
+            {
+                entity->carried_coins += LARGE_TREASURE_CASH;
+                server->map.tiles[entity->position.y][entity->position.x] = TILE_EMPTY;
+                continue;
+            }
+            else if (stands_on == TILE_CAMPSITE)
+            {
+                entity->brought_coins += entity->carried_coins;
+                entity->carried_coins = 0;
+                continue;
+            }
+        }
+
+        node = node->next;
+    }
+
+    node = server->entities->head;
+    while (node)
+    {
+        ENTITY *entity = node->item;
         MAP_CHUNK chunk;
-        map_get_chunk(&args.server->map, &chunk, args.player->position);
-        PACKET_DATA_RESPONSE packet_data_response = {
-            .pid = args.game->server_pid,
-            .number = args.player->number,
-            .chunk = chunk,
-            .turns = args.game->turns,
-            .carried_coins = args.player->carried_coins,
-            .brought_coins = args.player->brought_coins,
-            .deaths = args.player->deaths,
-            .position = args.player->position,
-            .state = args.player->state,
-            .end = false,
-        };
+        map_get_chunk(&server->map, &chunk, entity->position);
+        prepare_map_chunk(server, &chunk);
+        send_server_game_data(entity->socket_fd, entity, &chunk);
 
-        send(args.player->socket_fd, (void *)&packet_data_response, sizeof(PACKET_DATA_RESPONSE), 0);
+        node = node->next;
     }
 
     return NULL;
 }
 
-void *server_acceptance(void *arguments)
+static void *server_entity_handler(void *arguments)
 {
     if (arguments == NULL)
     {
         return NULL;
     }
 
-    SERVER_ACCEPTANCE_ARGS args = *(SERVER_ACCEPTANCE_ARGS *)arguments;
-    if (args.running == NULL || args.game == NULL || args.server == NULL)
+    SERVER_ENTITY_HANDLER_ARGS args = *(SERVER_ENTITY_HANDLER_ARGS *)arguments;
+    free(arguments);
+
+    if (args.server == NULL || args.entity == NULL)
     {
         return NULL;
     }
 
-    while (*args.running)
+    SERVER *server = args.server;
+    ENTITY *entity = args.entity;
+
+    while (server->game.running)
     {
-        int client_socket = accept(args.game->server_socket_fd,NULL, NULL);
+        PACKET packet;
+        ssize_t received_bytes = recv_packet(entity->socket_fd, &packet);
+        pthread_mutex_lock(&game_state_mutex);
+        if (received_bytes <= 0)
+        {
+            // Client has disconnected or something went wrong.
+            close(entity->socket_fd);
+            server_remove_entity(server, entity);
+            clear();
+            pthread_mutex_unlock(&game_state_mutex);
+            break;
+        }
+
+        switch (packet.type)
+        {
+            case PACKET_TYPE_CLIENT_MOVE:
+                entity->direction = packet.client_move.direction;
+                break;
+
+            case PACKET_TYPE_CLIENT_QUIT:
+                close(entity->socket_fd);
+                server_remove_entity(server, entity);
+                clear();
+                pthread_mutex_unlock(&game_state_mutex);
+                return NULL;
+
+            default:
+                break;
+        }
+
+        pthread_mutex_unlock(&game_state_mutex);
+    }
+
+    return NULL;
+}
+
+static void *server_acceptance(void *arguments)
+{
+    if (arguments == NULL)
+    {
+        return NULL;
+    }
+
+    SERVER *server = (SERVER *)arguments;
+    if (server == NULL)
+    {
+        return NULL;
+    }
+
+    while (server->game.running)
+    {
+        int client_socket = accept(server->game.server_socket_fd,NULL, NULL);
         if (client_socket == -1)
         {
             continue;
         }
 
-        PLAYER *player = server_add_player(args.server);
-        if (player == NULL)
+        PACKET packet;
+        ssize_t received_bytes = recv_packet(client_socket, &packet);
+        if (received_bytes <= 0 || packet.type != PACKET_TYPE_CLIENT_HANDSHAKE)
         {
+            // Something went wrong.
             close(client_socket);
             continue;
         }
 
-        player_init(player, find_spot_for_player(&args.server->map, args.server), HUMAN);
-        player->socket_fd = client_socket;
+        pthread_mutex_lock(&game_state_mutex);
 
-        SERVER_PLAYER_HANDLER_ARGS player_handler_args = {
-            .running = args.running,
-            .game = args.game,
-            .server = args.server,
-            .player = player,
-        };
-        pthread_create(&player->thread_id, NULL, server_player_handler, (void *)&player_handler_args);
+        ENTITY *entity = NULL;
+
+        switch (packet.client_handshake.type)
+        {
+            case ENTITY_TYPE_BOT:
+            case ENTITY_TYPE_PLAYER:
+                if (server->number_of_players >= MAX_PLAYERS)
+                {
+                    // Server is full.
+                    send_server_full(client_socket);
+                    close(client_socket);
+                    pthread_mutex_unlock(&game_state_mutex);
+                    continue;
+                }
+
+                server->number_of_players++;
+
+                entity = server_add_entity(server);
+                entity->type = packet.client_handshake.type;
+                entity->pid = packet.client_handshake.pid;
+                entity->number = player_get_number(server->entities);
+                entity->spawn_point = map_find_free_tile(&server->map);
+                entity->position = entity->spawn_point;
+                break;
+
+            case ENTITY_TYPE_BEAST:
+            {
+                break;
+            }
+
+            default:
+                // Something went wrong.
+                close(client_socket);
+                pthread_mutex_unlock(&game_state_mutex);
+                continue;
+        }
+
+        entity->socket_fd = client_socket;
+        send_server_handshake(entity->socket_fd, entity, &server->game);
+
+        SERVER_ENTITY_HANDLER_ARGS *args = malloc(sizeof(SERVER_ENTITY_HANDLER_ARGS));
+        args->server = server;
+        args->entity = entity;
+
+        pthread_create(&entity->thread, NULL, server_entity_handler, args);
+
+        pthread_mutex_unlock(&game_state_mutex);
     }
 
     return NULL;
@@ -273,7 +469,6 @@ void *server_acceptance(void *arguments)
 void server_main_loop(int server_socket_fd)
 {
     double delta_time = TIME_PER_TURN;
-    bool running = true;
     struct timeval last_update;
     gettimeofday(&last_update, NULL);
 
@@ -282,10 +477,8 @@ void server_main_loop(int server_socket_fd)
     SERVER server;
     server_init(&server);
 
-    GAME game;
-    game_init(&game);
-    game.server_pid = getpid();
-    game.server_socket_fd = server_socket_fd;
+    server.game.server_pid = getpid();
+    server.game.server_socket_fd = server_socket_fd;
 
     if (map_load(&server.map, MAP_FILE))
     {
@@ -294,18 +487,13 @@ void server_main_loop(int server_socket_fd)
     }
 
     pthread_t server_acceptance_thread;
-    SERVER_ACCEPTANCE_ARGS server_acceptance_args = {
-        .running = &running,
-        .game = &game,
-        .server = &server,
-    };
-    pthread_create(&server_acceptance_thread, NULL, server_acceptance, (void *)&server_acceptance_args);
+    pthread_create(&server_acceptance_thread, NULL, server_acceptance, (void *)&server);
     pthread_detach(server_acceptance_thread);
 
-    while (running)
+    while (server.game.running)
     {
         char key = getch();
-        on_key_pressed(key, &running);
+        on_key_pressed(key, &server.game.running);
         update_timer(&delta_time, &last_update);
 
         if (delta_time < TIME_PER_TURN)
@@ -313,10 +501,15 @@ void server_main_loop(int server_socket_fd)
             continue;
         }
 
-        draw_server_interface(&server, &game);
+        pthread_mutex_lock(&game_state_mutex);
+
+        handle_game_state(&server);
+        draw_server_interface(&server);
+
+        pthread_mutex_unlock(&game_state_mutex);
 
         delta_time -= TIME_PER_TURN;
-        game.turns++;
+        server.game.turns++;
     }
 
     pthread_join(server_acceptance_thread, NULL);

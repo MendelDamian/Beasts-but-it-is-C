@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
         }
 
         // Listen for connections.
-        int listen_status = listen(socket_fd, MAX_PLAYERS);
+        int listen_status = listen(socket_fd, 20);
         if (listen_status == -1)
         {
             perror("ERROR on listening");

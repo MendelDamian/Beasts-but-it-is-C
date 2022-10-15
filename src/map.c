@@ -1,12 +1,11 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "map.h"
 
 void map_init(MAP *map)
 {
-    map->width = 0;
-    map->height = 0;
-    memset(map->tiles, 0, sizeof(map->tiles));
+    memset(map, 0, sizeof(MAP));
 }
 
 int map_load(MAP *map, const char *filename)
@@ -138,6 +137,13 @@ void map_draw_chunk(MAP_CHUNK *chunk)
 
             switch (chunk->tiles[i][j])
             {
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                    color = COLOR_PAIR(PAIR_PLAYER);
+                    break;
+
                 default:
                 case TILE_EMPTY:
                     color = COLOR_PAIR(PAIR_EMPTY);
@@ -197,4 +203,28 @@ void map_get_chunk(MAP *map, MAP_CHUNK *chunk, COORDS position)
             }
         }
     }
+}
+
+COORDS map_find_free_tile(MAP *map)
+{
+    COORDS coords = {0, 0};
+
+    if (map == NULL)
+    {
+        return coords;
+    }
+
+    uint8_t x = 0;
+    uint8_t y = 0;
+
+    do
+    {
+        x = rand() % map->width;
+        y = rand() % map->height;
+    } while (map->tiles[y][x] != TILE_EMPTY);
+
+    coords.x = x;
+    coords.y = y;
+
+    return coords;
 }

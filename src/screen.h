@@ -6,7 +6,7 @@
 #include "game.h"
 
 void screen_init(void);
-void draw_server_interface(SERVER *server, GAME *game);
-void draw_client_interface(MAP_CHUNK *map_chunk, GAME *game, PLAYER *player);
+void draw_server_interface(SERVER *server);
+void draw_client_interface(MAP_CHUNK *map_chunk, GAME *game, ENTITY *entity);
 
 #endif //SCREEN_H

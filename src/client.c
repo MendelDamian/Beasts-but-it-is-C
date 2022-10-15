@@ -1,17 +1,25 @@
 #include <sys/time.h>
-#include <sys/socket.h>
 #include <unistd.h>
+#include <stdlib.h>
 
+#include "network_protocol.h"
 #include "client.h"
 #include "game.h"
-#include "player.h"
 #include "timer.h"
-#include "packets.h"
 #include "screen.h"
 
-static void on_key_pressed(char key, bool *running, PLAYER *player)
+pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+typedef struct client_listener_args_t
 {
-    if (running == NULL || player == NULL)
+    GAME *game;
+    ENTITY *entity;
+    MAP_CHUNK *chunk;
+} CLIENT_LISTENER_ARGS;
+
+static void on_key_pressed(char key, GAME *game, ENTITY *entity)
+{
+    if (game == NULL || entity == NULL)
     {
         return;
     }
@@ -20,27 +28,29 @@ static void on_key_pressed(char key, bool *running, PLAYER *player)
     {
         case 'Q':
         case 'q':
-            *running = false;
+            send_client_quit(game->server_socket_fd);
+            close(game->server_socket_fd);
+            game->running = false;
             break;
 
         case 'W':
         case 'w':
-            player->direction = NORTH;
+            entity->direction = NORTH;
             break;
 
         case 'A':
         case 'a':
-            player->direction = WEST;
+            entity->direction = WEST;
             break;
 
         case 'S':
         case 's':
-            player->direction = SOUTH;
+            entity->direction = SOUTH;
             break;
 
         case 'D':
         case 'd':
-            player->direction = EAST;
+            entity->direction = EAST;
             break;
 
         default:
@@ -48,64 +58,111 @@ static void on_key_pressed(char key, bool *running, PLAYER *player)
     }
 }
 
-void send_packet(bool *running, PLAYER *player, GAME *game, MAP_CHUNK *chunk)
+void *client_listener(void *arguments)
 {
-    PACKET_DATA packet_data = {
-        .pid = player->pid,
-        .direction = player->direction,
-        .quit = false,
-    };
-
-    if (send(game->server_socket_fd, &packet_data, sizeof(packet_data), 0) == -1)
+    if (arguments == NULL)
     {
-        return;
-    }
-    player->direction = NONE;
-
-    PACKET_DATA_RESPONSE packet_data_response;
-    if (recv(game->server_socket_fd, &packet_data_response, sizeof(packet_data_response), 0) == -1)
-    {
-        return;
+        return NULL;
     }
 
-    if (packet_data_response.end)
+    CLIENT_LISTENER_ARGS args = *(CLIENT_LISTENER_ARGS *)arguments;
+    if (args.game == NULL || args.entity == NULL || args.chunk == NULL)
     {
-        *running = false;
+        return NULL;
     }
 
-    game->server_pid = packet_data_response.pid;
-    player->number = packet_data_response.number;
-    *chunk = packet_data_response.chunk;
-    game->turns = packet_data_response.turns;
-    player->carried_coins = packet_data_response.carried_coins;
-    player->brought_coins = packet_data_response.brought_coins;
-    player->deaths = packet_data_response.deaths;
-    player->position = packet_data_response.position;
-    player->state = packet_data_response.state;
+    GAME *game = args.game;
+    ENTITY *entity = args.entity;
+    MAP_CHUNK *chunk = args.chunk;
+
+    while (game->running)
+    {
+        PACKET packet;
+        ssize_t bytes_received = recv_packet(game->server_socket_fd, &packet);
+        if (bytes_received <= 0)
+        {
+            // Server closed connection or something went wrong.
+            game->running = false;
+            close(game->server_socket_fd);
+            return NULL;
+        }
+
+        pthread_mutex_lock(&client_mutex);
+
+        switch (packet.type)
+        {
+            case PACKET_TYPE_SERVER_GAME_END:
+            case PACKET_TYPE_SERVER_FULL:
+                game->running = false;
+                close(game->server_socket_fd);
+                pthread_mutex_unlock(&client_mutex);
+                return NULL;
+
+            case PACKET_TYPE_SERVER_HANDSHAKE:
+                game->server_pid = packet.server_handshake.pid;
+                entity->spawn_point = packet.server_handshake.spawn_point;
+                entity->position = packet.server_handshake.spawn_point;
+                entity->number = packet.server_handshake.number;
+                game->turns = packet.server_handshake.turns;
+                break;
+
+            case PACKET_TYPE_SERVER_GAME_DATA:
+                entity->position = packet.server_game_data.position;
+                *chunk = packet.server_game_data.chunk;
+                entity->deaths = packet.server_game_data.deaths;
+                entity->carried_coins = packet.server_game_data.carried_coins;
+                entity->brought_coins = packet.server_game_data.brought_coins;
+
+                entity->direction = NONE;
+                break;
+
+            default:
+                break;
+        }
+
+        pthread_mutex_unlock(&client_mutex);
+    }
+
+    return NULL;
 }
 
 void client_main_loop(int sock_fd)
 {
     double delta_time = TIME_PER_TURN;
-    bool running = true;
     struct timeval last_update;
     gettimeofday(&last_update, NULL);
 
-    screen_init();
+    MAP_CHUNK chunk;
+    ENTITY entity;
+    entity.pid = getpid();
 
     GAME game;
     game_init(&game);
     game.turns = 0;
     game.server_socket_fd = sock_fd;
 
-    MAP_CHUNK chunk;
-    PLAYER player;
-    player.pid = getpid();
+    send_client_handshake(game.server_socket_fd, &entity);
 
-    while (running)
+    screen_init();
+
+    CLIENT_LISTENER_ARGS args;
+    args.game = &game;
+    args.entity = &entity;
+    args.chunk = &chunk;
+    pthread_t listener_thread;
+    pthread_create(&listener_thread, NULL, client_listener, &args);
+
+    while (game.running)
     {
         char key = getch();
-        on_key_pressed(key, &running, &player);
+        on_key_pressed(key, &game, &entity);
+        if (game.running == false)
+        {
+            break;
+        }
+
+        send_client_move(game.server_socket_fd, &entity);
+
         update_timer(&delta_time, &last_update);
 
         if (delta_time < TIME_PER_TURN)
@@ -113,18 +170,16 @@ void client_main_loop(int sock_fd)
             continue;
         }
 
-        if (player.direction != NONE)
-        {
-            clear();
-        }
-
-        send_packet(&running, &player, &game, &chunk);
-
-        draw_client_interface(&chunk, &game, &player);
+        pthread_mutex_lock(&client_mutex);
+        clear();
+        draw_client_interface(&chunk, &game, &entity);
+        pthread_mutex_unlock(&client_mutex);
 
         delta_time -= TIME_PER_TURN;
         game.turns++;
     }
+
+    pthread_join(listener_thread, NULL);
 
     endwin();
 }

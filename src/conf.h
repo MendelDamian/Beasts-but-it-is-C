@@ -11,5 +11,8 @@
 #define INTERFACE_OFFSET_Y 2
 #define SIDEBAR_OFFSET_X 60
 #define SIDEBAR_OFFSET_Y 1
+#define COIN_CASH 1
+#define TREASURE_CASH 10
+#define LARGE_TREASURE_CASH 25
 
 #endif //CONF_H
