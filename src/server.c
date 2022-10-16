@@ -75,6 +75,50 @@ static void prepare_map_chunk(SERVER *server, MAP_CHUNK *chunk)
     }
 }
 
+COORDS map_find_free_tile(SERVER *server)
+{
+    COORDS coords = {0, 0};
+    if (server == NULL)
+    {
+        return coords;
+    }
+
+    MAP *map = &server->map;
+
+    // Check if there is any free tile.
+    bool free_tile_found = false;
+    for (uint8_t i = 0; i < map->height; ++i)
+    {
+        for (uint8_t j = 0; j < map->width; ++j)
+        {
+            if (map->tiles[i][j] == TILE_EMPTY
+                && get_entity_at_coords(server->entities, (COORDS){ j, i }) == NULL
+                && get_treasure_at_coords(server->dropped_treasures, (COORDS){ j, i }) == NULL)
+            {
+                free_tile_found = true;
+                break;
+            }
+        }
+        if (free_tile_found)
+        {
+            break;
+        }
+    }
+
+    if (free_tile_found == false)
+    {
+        return coords;
+    }
+
+    do
+    {
+        coords.x = rand() % map->width;
+        coords.y = rand() % map->height;
+    } while (map->tiles[coords.y][coords.x] != TILE_EMPTY);
+
+    return coords;
+}
+
 static ENTITY *server_add_entity(SERVER *server)
 {
     if (server == NULL)
@@ -172,7 +216,7 @@ static void server_spawn_cash(SERVER *server, TILE type)
         return;
     }
 
-    COORDS coords = map_find_free_tile(&server->map);
+    COORDS coords = map_find_free_tile(server);
     if (coords.x == 0 && coords.y == 0)
     {
         return;
@@ -481,14 +525,25 @@ static void *server_acceptance(void *arguments)
                     continue;
                 }
 
+                COORDS position = map_find_free_tile(server);
+                if (position.x == 0 && position.y == 0)
+                {
+                    // Map is full.
+                    send_server_game_end(client_socket);
+                    close(client_socket);
+                    pthread_mutex_unlock(&game_state_mutex);
+                    continue;
+                }
+
                 server->number_of_players++;
 
                 entity = server_add_entity(server);
                 entity->type = packet.client_handshake.type;
                 entity->pid = packet.client_handshake.pid;
                 entity->number = player_get_number(server->entities);
-                entity->spawn_point = map_find_free_tile(&server->map);
+                entity->spawn_point = position;
                 entity->position = entity->spawn_point;
+
                 break;
 
             case ENTITY_TYPE_BEAST:

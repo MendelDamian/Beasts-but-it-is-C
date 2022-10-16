@@ -209,27 +209,3 @@ void map_get_chunk(MAP *map, MAP_CHUNK *chunk, COORDS position)
         }
     }
 }
-
-COORDS map_find_free_tile(MAP *map)
-{
-    COORDS coords = {0, 0};
-
-    if (map == NULL)
-    {
-        return coords;
-    }
-
-    uint8_t x = 0;
-    uint8_t y = 0;
-
-    do
-    {
-        x = rand() % map->width;
-        y = rand() % map->height;
-    } while (map->tiles[y][x] != TILE_EMPTY);
-
-    coords.x = x;
-    coords.y = y;
-
-    return coords;
-}

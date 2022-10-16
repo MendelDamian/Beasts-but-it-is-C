@@ -44,6 +44,5 @@ int map_load(MAP *map, const char *filename, COORDS *campsite_position);
 void map_draw(MAP *map);
 void map_draw_chunk(MAP_CHUNK *chunk);
 void map_get_chunk(MAP *map, MAP_CHUNK *chunk, COORDS position);
-COORDS map_find_free_tile(MAP *map);
 
 #endif //MAP_H
