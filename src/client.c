@@ -1,3 +1,4 @@
+#define _DEFAULT_SOURCE  // To clear warnings about usleep() implicit declaration.
 #include <sys/time.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -9,6 +10,7 @@
 #include "screen.h"
 
 pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
+static bool draw_full_screen = true;
 
 typedef struct client_listener_args_t
 {
@@ -17,7 +19,7 @@ typedef struct client_listener_args_t
     MAP_CHUNK *chunk;
 } CLIENT_LISTENER_ARGS;
 
-static void on_key_pressed(char key, GAME *game, ENTITY *entity)
+static void on_key_pressed(int key, GAME *game, ENTITY *entity)
 {
     if (game == NULL || entity == NULL)
     {
@@ -35,21 +37,25 @@ static void on_key_pressed(char key, GAME *game, ENTITY *entity)
 
         case 'W':
         case 'w':
+        case KEY_UP:
             entity->direction = NORTH;
             break;
 
         case 'A':
         case 'a':
+        case KEY_LEFT:
             entity->direction = WEST;
             break;
 
         case 'S':
         case 's':
+        case KEY_DOWN:
             entity->direction = SOUTH;
             break;
 
         case 'D':
         case 'd':
+        case KEY_RIGHT:
             entity->direction = EAST;
             break;
 
@@ -136,6 +142,8 @@ void client_main_loop(int sock_fd)
     MAP_CHUNK chunk;
     ENTITY entity;
     entity.pid = getpid();
+    // Bot is child process of the server.
+    entity.type = entity.pid == 0 ? ENTITY_TYPE_BOT : ENTITY_TYPE_PLAYER;
 
     GAME game;
     game_init(&game);
@@ -144,7 +152,10 @@ void client_main_loop(int sock_fd)
 
     send_client_handshake(game.server_socket_fd, &entity);
 
-    screen_init();
+    if (entity.type == ENTITY_TYPE_PLAYER)
+    {
+        screen_init();
+    }
 
     CLIENT_LISTENER_ARGS args;
     args.game = &game;
@@ -155,11 +166,21 @@ void client_main_loop(int sock_fd)
 
     while (game.running)
     {
-        char key = getch();
-        on_key_pressed(key, &game, &entity);
-        if (game.running == false)
+        if (entity.type == ENTITY_TYPE_PLAYER)
         {
-            break;
+            int key = getch();
+            on_key_pressed(key, &game, &entity);
+
+            if (game.running == false)
+            {
+                break;
+            }
+        }
+        else
+        {
+            // Sleep for 200ms.
+            nanosleep((const struct timespec[]){{0, 200000000L}}, NULL);
+            entity.direction = rand() % 5;
         }
 
         send_client_move(game.server_socket_fd, &entity);
@@ -171,10 +192,15 @@ void client_main_loop(int sock_fd)
             continue;
         }
 
-        pthread_mutex_lock(&client_mutex);
-        clear();
-        draw_client_interface(&chunk, &game, &entity);
-        pthread_mutex_unlock(&client_mutex);
+
+        if (entity.type == ENTITY_TYPE_PLAYER)
+        {
+            clear();
+            pthread_mutex_lock(&client_mutex);
+            draw_client_interface(&chunk, &game, &entity, draw_full_screen);
+            pthread_mutex_unlock(&client_mutex);
+            refresh();
+        }
 
         delta_time -= TIME_PER_TURN;
         game.turns++;
@@ -182,5 +208,8 @@ void client_main_loop(int sock_fd)
 
     pthread_join(listener_thread, NULL);
 
-    endwin();
+    if (entity.type == ENTITY_TYPE_PLAYER)
+    {
+        endwin();
+    }
 }

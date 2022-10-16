@@ -96,18 +96,26 @@ void draw_legend()
     printw("    - campsite");
 }
 
-void draw_server_interface(SERVER *server)
+void draw_server_interface(SERVER *server, bool full_draw)
 {
     if (server == NULL)
     {
         return;
     }
 
+    if (full_draw)
+    {
+        clear();
+
+        // Draw legend.
+        draw_legend();
+
+        // Draw server info.
+        draw_server_info(&server->game);
+    }
+
     // Draw map.
     map_draw(&server->map);
-
-    // Draw sidebar's server info.
-    draw_server_info(&server->game);
 
     // Draw sidebar's players section.
     uint8_t y = 5;
@@ -157,16 +165,13 @@ void draw_server_interface(SERVER *server)
             printw("%hu", entity->carried_coins);
             move(SIDEBAR_OFFSET_Y + y + 8, SIDEBAR_OFFSET_X + x);
             printw("%hu", entity->brought_coins);
-            }
+        }
 
         node = node->next;
     }
-
-    // Draw legend.
-    draw_legend();
 }
 
-void draw_client_interface(MAP_CHUNK *map_chunk, GAME *game, ENTITY *entity)
+void draw_client_interface(MAP_CHUNK *map_chunk, GAME *game, ENTITY *entity, bool full_draw)
 {
     if (map_chunk == NULL || game == NULL || entity == NULL)
     {
@@ -176,8 +181,14 @@ void draw_client_interface(MAP_CHUNK *map_chunk, GAME *game, ENTITY *entity)
     // Draw map.
     map_draw_chunk(map_chunk);
 
-    // Draw sidebar's server info.
-    draw_server_info(game);
+    if (full_draw)
+    {
+        // Draw legend.
+        draw_legend();
+
+        // Draw server info.
+        draw_server_info(game);
+    }
 
     // Draw sidebar's players section.
     uint8_t y = 5;
@@ -214,6 +225,4 @@ void draw_client_interface(MAP_CHUNK *map_chunk, GAME *game, ENTITY *entity)
     move(SIDEBAR_OFFSET_Y + y + 1, SIDEBAR_OFFSET_X + x);
     printw("Coins brought: %d", entity->brought_coins);
 
-    // Draw legend.
-    draw_legend();
 }

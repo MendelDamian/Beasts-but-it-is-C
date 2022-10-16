@@ -12,6 +12,7 @@
 #include "screen.h"
 
 pthread_mutex_t game_state_mutex = PTHREAD_MUTEX_INITIALIZER;
+static bool draw_full_screen = true;
 
 typedef struct server_entity_handler_args_t
 {
@@ -159,7 +160,7 @@ uint8_t player_get_number(DLL *entities)
     return number;
 }
 
-static void on_key_pressed(char key, bool *running)
+static void on_key_pressed(int key, bool *running)
 {
     if (running == NULL)
     {
@@ -185,6 +186,11 @@ void *handle_game_state(SERVER *server)
         return NULL;
     }
 
+    // To prevent the game from de-synchronization, we need to divide the game state handle into two phases:
+    // 1. Update the entities positions
+    // 2. Update the game state itself
+
+    // Phase 1. Update the entities positions.
     NODE *node = server->entities->head;
     while (node)
     {
@@ -240,12 +246,21 @@ void *handle_game_state(SERVER *server)
             if (moved)
             {
                 entity->stagnancy = 0;
-            }
-            else
+            } else
             {
                 entity->stagnancy++;
             }
         }
+
+        node = node->next;
+    }
+
+    // Phase 2. Update the game state.
+    node = server->entities->head;
+    while (node)
+    {
+        ENTITY *entity = node->item;
+        TREASURE *treasure = NULL;
 
         // Check if the entity shares tile with any other entity.
         ENTITY *other_entity = get_entity_at_coords(server->entities, entity->position);
@@ -268,50 +283,48 @@ void *handle_game_state(SERVER *server)
             other_entity->carried_coins = 0;
             server_add_treasure(server, meeting_point, total_coins);
             server->map.tiles[meeting_point.y][meeting_point.x] = TILE_DROPPED_TREASURE;
-            continue;
         }
-
         // Check for dropped treasures.
-        TREASURE *treasure = get_treasure_at_coords(server->dropped_treasures, entity->position);
-        if (treasure != NULL)
+        else if ((treasure = get_treasure_at_coords(server->dropped_treasures, entity->position)) != NULL)
         {
             entity->carried_coins += treasure->coins;
             server_remove_treasure(server, treasure);
-            continue;
         }
-
         // Check if non-beast entity stands on specific block.
-        if (entity->type != ENTITY_TYPE_BEAST)
+        else if (entity->type != ENTITY_TYPE_BEAST)
         {
             char stands_on = server->map.tiles[entity->position.y][entity->position.x];
-            if (stands_on == TILE_COIN)
+            switch (stands_on)
             {
-                entity->carried_coins += COIN_CASH;
-                server->map.tiles[entity->position.y][entity->position.x] = TILE_EMPTY;
-                continue;
-            }
-            else if (stands_on == TILE_TREASURE)
-            {
-                entity->carried_coins += TREASURE_CASH;
-                server->map.tiles[entity->position.y][entity->position.x] = TILE_EMPTY;
-                continue;
-            }
-            else if (stands_on == TILE_LARGE_TREASURE)
-            {
-                entity->carried_coins += LARGE_TREASURE_CASH;
-                server->map.tiles[entity->position.y][entity->position.x] = TILE_EMPTY;
-                continue;
-            }
-            else if (stands_on == TILE_CAMPSITE)
-            {
-                entity->brought_coins += entity->carried_coins;
-                entity->carried_coins = 0;
-                continue;
+                case TILE_COIN:
+                    entity->carried_coins += COIN_CASH;
+                    server->map.tiles[entity->position.y][entity->position.x] = TILE_EMPTY;
+                    break;
+
+                case TILE_TREASURE:
+                    entity->carried_coins += TREASURE_CASH;
+                    server->map.tiles[entity->position.y][entity->position.x] = TILE_EMPTY;
+                    break;
+
+                case TILE_LARGE_TREASURE:
+                    entity->carried_coins += LARGE_TREASURE_CASH;
+                    server->map.tiles[entity->position.y][entity->position.x] = TILE_EMPTY;
+                    break;
+
+                case TILE_CAMPSITE:
+                    entity->brought_coins += entity->carried_coins;
+                    entity->carried_coins = 0;
+                    break;
+
+                default:
+                    break;
             }
         }
 
         node = node->next;
     }
+
+    // Send the game state to the clients.
 
     node = server->entities->head;
     while (node)
@@ -356,7 +369,8 @@ static void *server_entity_handler(void *arguments)
             // Client has disconnected or something went wrong.
             close(entity->socket_fd);
             server_remove_entity(server, entity);
-            clear();
+//            clear();
+            draw_full_screen = true;
             pthread_mutex_unlock(&game_state_mutex);
             break;
         }
@@ -370,7 +384,8 @@ static void *server_entity_handler(void *arguments)
             case PACKET_TYPE_CLIENT_QUIT:
                 close(entity->socket_fd);
                 server_remove_entity(server, entity);
-                clear();
+//                clear();
+                draw_full_screen = true;
                 pthread_mutex_unlock(&game_state_mutex);
                 return NULL;
 
@@ -494,7 +509,7 @@ void server_main_loop(int server_socket_fd)
 
     while (server.game.running)
     {
-        char key = getch();
+        int key = getch();
         on_key_pressed(key, &server.game.running);
         update_timer(&delta_time, &last_update);
 
@@ -506,7 +521,8 @@ void server_main_loop(int server_socket_fd)
         pthread_mutex_lock(&game_state_mutex);
 
         handle_game_state(&server);
-        draw_server_interface(&server);
+        draw_server_interface(&server, draw_full_screen);
+        draw_full_screen = false;
 
         pthread_mutex_unlock(&game_state_mutex);
 

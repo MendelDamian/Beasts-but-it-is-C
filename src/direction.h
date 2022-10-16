@@ -3,7 +3,7 @@
 
 typedef enum direction_t
 {
-    NORTH,
+    NORTH = 0,
     SOUTH,
     WEST,
     EAST,
