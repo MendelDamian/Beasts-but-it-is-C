@@ -160,9 +160,32 @@ uint8_t player_get_number(DLL *entities)
     return number;
 }
 
-static void on_key_pressed(int key, bool *running)
+static void server_spawn_cash(SERVER *server, TILE type)
 {
-    if (running == NULL)
+    if (server == NULL)
+    {
+        return;
+    }
+
+    if (type != TILE_COIN && type != TILE_TREASURE && type != TILE_LARGE_TREASURE)
+    {
+        return;
+    }
+
+    COORDS coords = map_find_free_tile(&server->map);
+    if (coords.x == 0 && coords.y == 0)
+    {
+        return;
+    }
+
+    pthread_mutex_lock(&game_state_mutex);
+    server->map.tiles[coords.y][coords.x] = type;
+    pthread_mutex_unlock(&game_state_mutex);
+}
+
+static void on_key_pressed(int key, SERVER *server)
+{
+    if (server == NULL)
     {
         return;
     }
@@ -171,7 +194,19 @@ static void on_key_pressed(int key, bool *running)
     {
         case 'Q':
         case 'q':
-            *running = false;
+            server->game.running = false;
+            break;
+
+        case TILE_COIN:
+            server_spawn_cash(server, TILE_COIN);
+            break;
+
+        case TILE_TREASURE:
+            server_spawn_cash(server, TILE_TREASURE);
+            break;
+
+        case TILE_LARGE_TREASURE:
+            server_spawn_cash(server, TILE_LARGE_TREASURE);
             break;
 
         default:
@@ -510,7 +545,7 @@ void server_main_loop(int server_socket_fd)
     while (server.game.running)
     {
         int key = getch();
-        on_key_pressed(key, &server.game.running);
+        on_key_pressed(key, &server);
         update_timer(&delta_time, &last_update);
 
         if (delta_time < TIME_PER_TURN)

@@ -109,10 +109,10 @@ void draw_server_interface(SERVER *server, bool full_draw)
 
         // Draw legend.
         draw_legend();
-
-        // Draw server info.
-        draw_server_info(&server->game);
     }
+
+    // Draw server info.
+    draw_server_info(&server->game);
 
     // Draw map.
     map_draw(&server->map);
@@ -185,10 +185,10 @@ void draw_client_interface(MAP_CHUNK *map_chunk, GAME *game, ENTITY *entity, boo
     {
         // Draw legend.
         draw_legend();
-
-        // Draw server info.
-        draw_server_info(game);
     }
+
+    // Draw server info.
+    draw_server_info(game);
 
     // Draw sidebar's players section.
     uint8_t y = 5;
