@@ -6,14 +6,12 @@
 
 DLL *dll_create(size_t size_of_element)
 {
-    DLL *dll = malloc(sizeof(DLL));
+    DLL *dll = calloc(1, sizeof(DLL));
     if (dll == NULL)
     {
         return NULL;
     }
 
-    dll->head = NULL;
-    dll->tail = NULL;
     dll->size_of_element = size_of_element;
     return dll;
 }

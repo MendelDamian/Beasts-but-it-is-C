@@ -36,6 +36,27 @@ void server_init(SERVER *server)
     server->game.campsite = (COORDS){ 0, 0 };
 }
 
+void server_destroy(SERVER *server)
+{
+    if (server == NULL)
+    {
+        return;
+    }
+
+    NODE *node = server->entities->head;
+    while (node != NULL)
+    {
+        ENTITY *entity = (ENTITY *)node->item;
+        pthread_cancel(entity->thread);
+        node = node->next;
+    }
+
+    dll_clear(server->entities);
+    dll_clear(server->dropped_treasures);
+    free(server->entities);
+    free(server->dropped_treasures);
+}
+
 static void prepare_map_chunk(SERVER *server, MAP_CHUNK *chunk)
 {
     if (server == NULL || chunk == NULL)
@@ -448,10 +469,9 @@ static void *server_entity_handler(void *arguments)
             // Client has disconnected or something went wrong.
             close(entity->socket_fd);
             server_remove_entity(server, entity);
-//            clear();
             draw_full_screen = true;
             pthread_mutex_unlock(&game_state_mutex);
-            break;
+            pthread_exit(NULL);
         }
 
         switch (packet.type)
@@ -463,10 +483,9 @@ static void *server_entity_handler(void *arguments)
             case PACKET_TYPE_CLIENT_QUIT:
                 close(entity->socket_fd);
                 server_remove_entity(server, entity);
-//                clear();
                 draw_full_screen = true;
                 pthread_mutex_unlock(&game_state_mutex);
-                return NULL;
+                pthread_exit(NULL);
 
             default:
                 break;
@@ -620,7 +639,7 @@ void server_main_loop(int server_socket_fd)
         server.game.turns++;
     }
 
-    pthread_join(server_acceptance_thread, NULL);
-
+    pthread_cancel(server_acceptance_thread);
+    server_destroy(&server);
     endwin();
 }

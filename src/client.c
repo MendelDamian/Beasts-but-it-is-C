@@ -141,6 +141,7 @@ void client_main_loop(int sock_fd)
 
     MAP_CHUNK chunk;
     ENTITY entity;
+    entity_init(&entity);
     entity.pid = getpid();
     // Bot is child process of the server.
     entity.type = entity.pid == 0 ? ENTITY_TYPE_BOT : ENTITY_TYPE_PLAYER;
@@ -206,7 +207,7 @@ void client_main_loop(int sock_fd)
         game.turns++;
     }
 
-    pthread_join(listener_thread, NULL);
+    pthread_cancel(listener_thread);
 
     if (entity.type == ENTITY_TYPE_PLAYER)
     {
