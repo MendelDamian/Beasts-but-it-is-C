@@ -32,7 +32,6 @@ typedef struct entity_t
 } ENTITY;
 
 void entity_init(ENTITY *entity);
-void draw_entity(ENTITY *entity);
 const char *get_entity_type_name(ENTITY_TYPE type);
 
 #endif //ENTITY_H

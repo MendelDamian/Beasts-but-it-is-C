@@ -7,10 +7,9 @@
 #include "client.h"
 #include "game.h"
 #include "timer.h"
-#include "screen.h"
+#include "interface.h"
 
 pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
-static bool draw_full_screen = true;
 
 typedef struct client_listener_args_t
 {
@@ -153,9 +152,10 @@ void client_main_loop(int sock_fd)
 
     send_client_handshake(game.server_socket_fd, &entity);
 
+    INTERFACE *interface = NULL;
     if (entity.type == ENTITY_TYPE_PLAYER)
     {
-        screen_init();
+        interface = interface_init();
     }
 
     CLIENT_LISTENER_ARGS args;
@@ -196,11 +196,9 @@ void client_main_loop(int sock_fd)
 
         if (entity.type == ENTITY_TYPE_PLAYER)
         {
-            clear();
             pthread_mutex_lock(&client_mutex);
-            draw_client_interface(&chunk, &game, &entity, draw_full_screen);
+            draw_client_interface(interface, &chunk, &game, &entity);
             pthread_mutex_unlock(&client_mutex);
-            refresh();
         }
 
         delta_time -= TIME_PER_TURN;
@@ -209,8 +207,5 @@ void client_main_loop(int sock_fd)
 
     pthread_cancel(listener_thread);
 
-    if (entity.type == ENTITY_TYPE_PLAYER)
-    {
-        endwin();
-    }
+    interface_destroy(interface);
 }

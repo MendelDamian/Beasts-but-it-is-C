@@ -41,8 +41,6 @@ typedef struct map_chunk_t
 
 void map_init(MAP *map);
 int map_load(MAP *map, const char *filename, COORDS *campsite_position);
-void map_draw(MAP *map);
-void map_draw_chunk(MAP_CHUNK *chunk);
 void map_get_chunk(MAP *map, MAP_CHUNK *chunk, COORDS position);
 
 #endif //MAP_H

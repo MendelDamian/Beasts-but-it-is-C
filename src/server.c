@@ -9,10 +9,9 @@
 #include "server.h"
 #include "network_protocol.h"
 #include "timer.h"
-#include "screen.h"
+#include "interface.h"
 
 pthread_mutex_t game_state_mutex = PTHREAD_MUTEX_INITIALIZER;
-static bool draw_full_screen = true;
 
 typedef struct server_entity_handler_args_t
 {
@@ -469,7 +468,6 @@ static void *server_entity_handler(void *arguments)
             // Client has disconnected or something went wrong.
             close(entity->socket_fd);
             server_remove_entity(server, entity);
-            draw_full_screen = true;
             pthread_mutex_unlock(&game_state_mutex);
             pthread_exit(NULL);
         }
@@ -483,7 +481,6 @@ static void *server_entity_handler(void *arguments)
             case PACKET_TYPE_CLIENT_QUIT:
                 close(entity->socket_fd);
                 server_remove_entity(server, entity);
-                draw_full_screen = true;
                 pthread_mutex_unlock(&game_state_mutex);
                 pthread_exit(NULL);
 
@@ -598,7 +595,7 @@ void server_main_loop(int server_socket_fd)
     struct timeval last_update;
     gettimeofday(&last_update, NULL);
 
-    screen_init();
+    INTERFACE *interface = interface_init();
 
     SERVER server;
     server_init(&server);
@@ -630,8 +627,7 @@ void server_main_loop(int server_socket_fd)
         pthread_mutex_lock(&game_state_mutex);
 
         handle_game_state(&server);
-        draw_server_interface(&server, draw_full_screen);
-        draw_full_screen = false;
+        draw_server_interface(interface, &server);
 
         pthread_mutex_unlock(&game_state_mutex);
 
@@ -641,5 +637,5 @@ void server_main_loop(int server_socket_fd)
 
     pthread_cancel(server_acceptance_thread);
     server_destroy(&server);
-    endwin();
+    interface_destroy(interface);
 }
