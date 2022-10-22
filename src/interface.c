@@ -116,6 +116,41 @@ void draw_legend(INTERFACE *interface)
     wprintw(interface->win, " - dropped treasure");
 }
 
+static void draw_key_bindings(INTERFACE *interface)
+{
+    uint8_t y = 14;
+    uint8_t x = 24;
+
+    wmove(interface->win, SIDEBAR_OFFSET_Y + y, SIDEBAR_OFFSET_X + x - 1);
+    wprintw(interface->win, "Key bindings:");
+
+    wmove(interface->win, SIDEBAR_OFFSET_Y + y + 1, SIDEBAR_OFFSET_X + x);
+    wprintw(interface->win, "WSAD/keys - move");
+
+    wmove(interface->win, SIDEBAR_OFFSET_Y + y + 2, SIDEBAR_OFFSET_X + x);
+    wprintw(interface->win, "q - quit");
+}
+
+static void draw_server_key_bindings(INTERFACE *interface)
+{
+    uint8_t y = 14;
+    uint8_t x = 24;
+
+    draw_key_bindings(interface);
+
+    wmove(interface->win, SIDEBAR_OFFSET_Y + y + 3, SIDEBAR_OFFSET_X + x);
+    wprintw(interface->win, "%c - spawn coin", TILE_COIN);
+
+    wmove(interface->win, SIDEBAR_OFFSET_Y + y + 4, SIDEBAR_OFFSET_X + x);
+    wprintw(interface->win, "%c - spawn treasure", TILE_TREASURE);
+
+    wmove(interface->win, SIDEBAR_OFFSET_Y + y + 5, SIDEBAR_OFFSET_X + x);
+    wprintw(interface->win, "%c - spawn large treasure", TILE_LARGE_TREASURE);
+
+    wmove(interface->win, SIDEBAR_OFFSET_Y + y + 6, SIDEBAR_OFFSET_X + x);
+    wprintw(interface->win, "b - spawn beast");
+}
+
 void draw_server_interface(INTERFACE *interface, SERVER *server)
 {
     if (interface == NULL || server == NULL)
@@ -125,6 +160,9 @@ void draw_server_interface(INTERFACE *interface, SERVER *server)
 
     // Draw legend.
     draw_legend(interface);
+
+    // Draw key bindings.
+    draw_server_key_bindings(interface);
 
     // Draw server info.
     draw_server_info(interface, &server->game);
@@ -226,6 +264,9 @@ void draw_client_interface(INTERFACE *interface, MAP_CHUNK *map_chunk, GAME *gam
 
     // Draw legend.
     draw_legend(interface);
+
+    // Draw key bindings.
+    draw_key_bindings(interface);
 
     // Draw server info.
     draw_server_info(interface, game);
