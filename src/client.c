@@ -207,5 +207,8 @@ void client_main_loop(int sock_fd)
 
     pthread_cancel(listener_thread);
 
-    interface_destroy(interface);
+    if (entity.type == ENTITY_TYPE_PLAYER)
+    {
+        interface_destroy(interface);
+    }
 }

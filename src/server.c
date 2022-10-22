@@ -63,11 +63,11 @@ static void prepare_map_chunk(SERVER *server, MAP_CHUNK *chunk)
         return;
     }
 
-    uint8_t begin_x = chunk->position.x - (chunk->width / 2);
-    uint8_t begin_y = chunk->position.y - (chunk->height / 2);
+    uint8_t begin_x = chunk->position.x - chunk->width / 2;
+    uint8_t begin_y = chunk->position.y - chunk->height / 2;
 
-    uint8_t end_x = chunk->position.x + (chunk->width / 2);
-    uint8_t end_y = chunk->position.y + (chunk->height / 2);
+    uint8_t end_x = chunk->position.x + chunk->width / 2;
+    uint8_t end_y = chunk->position.y + chunk->height / 2;
 
     NODE *node = server->entities->head;
     while (node)
@@ -76,15 +76,18 @@ static void prepare_map_chunk(SERVER *server, MAP_CHUNK *chunk)
         if (entity->position.x >= begin_x && entity->position.x <= end_x
             && entity->position.y >= begin_y && entity->position.y <= end_y)
         {
+            uint8_t y = entity->position.y - begin_y;
+            uint8_t x = entity->position.x - begin_x;
+
             switch (entity->type)
             {
                 case ENTITY_TYPE_PLAYER:
                 case ENTITY_TYPE_BOT:
-                    chunk->tiles[entity->position.y - begin_y][entity->position.x - begin_x] = (char)(entity->number + '0');
+                    chunk->tiles[y][x] = (char)(entity->number + '0');
                     break;
 
                 case ENTITY_TYPE_BEAST:
-                    chunk->tiles[entity->position.y - begin_y][entity->position.x - begin_x] = TILE_BEAST;
+                    chunk->tiles[y][x] = TILE_BEAST;
                     break;
 
                 default:
@@ -113,6 +116,7 @@ COORDS map_find_free_tile(SERVER *server)
         {
             if (map->tiles[i][j] == TILE_EMPTY
                 && get_entity_at_coords(server->entities, (COORDS){ j, i }) == NULL
+                && get_entity_at_spawn_point(server->entities, (COORDS){ j, i }) == NULL
                 && get_treasure_at_coords(server->dropped_treasures, (COORDS){ j, i }) == NULL)
             {
                 free_tile_found = true;
@@ -424,7 +428,6 @@ void *handle_game_state(SERVER *server)
     }
 
     // Send the game state to the clients.
-
     node = server->entities->head;
     while (node)
     {

@@ -149,6 +149,23 @@ void *get_entity_at_coords(DLL *dll, COORDS coords)
     return NULL;
 }
 
+void *get_entity_at_spawn_point(DLL *dll, COORDS coords)
+{
+    NODE *node = dll->head;
+    while (node != NULL)
+    {
+        ENTITY *entity = node->item;
+        if (entity->spawn_point.x == coords.x && entity->spawn_point.y == coords.y)
+        {
+            return node->item;
+        }
+
+        node = node->next;
+    }
+
+    return NULL;
+}
+
 void *get_treasure_at_coords(DLL *dll, COORDS coords)
 {
     NODE *node = dll->head;

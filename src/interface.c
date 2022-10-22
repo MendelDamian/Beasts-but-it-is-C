@@ -348,9 +348,8 @@ void draw_map_chunk(INTERFACE *interface, MAP_CHUNK *chunk)
     {
         for (uint8_t j = 0; j < chunk->width; ++j)
         {
-            uint8_t x = j + chunk->position.x - chunk->width / 2;
-            uint8_t y = i + chunk->position.y - chunk->height / 2;
-
+            uint8_t x = chunk->position.x + j - chunk->width / 2;
+            uint8_t y = chunk->position.y + i - chunk->width / 2;
             enum color_pair_t color = PAIR_DEFAULT;
 
             switch (chunk->tiles[i][j])

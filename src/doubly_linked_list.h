@@ -24,6 +24,7 @@ int dll_size(const DLL *dll);
 int dll_clear(DLL *dll);
 void dll_remove(DLL *dll, void *item);
 void *get_entity_at_coords(DLL *dll, COORDS coords);
+void *get_entity_at_spawn_point(DLL *dll, COORDS coords);
 void *get_treasure_at_coords(DLL *dll, COORDS coords);
 
 #endif //LINKED_LIST_H
