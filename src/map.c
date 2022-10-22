@@ -104,3 +104,27 @@ void map_get_chunk(MAP *map, MAP_CHUNK *chunk, COORDS position)
         }
     }
 }
+
+COORDS map_chunk_get_campsite(MAP_CHUNK *chunk)
+{
+    COORDS coords = {0, 0};
+    if (chunk == NULL)
+    {
+        return coords;
+    }
+
+    for (uint8_t i = 0; i < chunk->height; ++i)
+    {
+        for (uint8_t j = 0; j < chunk->width; ++j)
+        {
+            if (chunk->tiles[i][j] == TILE_CAMPSITE)
+            {
+                coords.x = chunk->position.x + j - (chunk->width / 2);
+                coords.y = chunk->position.y + i - (chunk->height / 2);
+                return coords;
+            }
+        }
+    }
+
+    return coords;
+}

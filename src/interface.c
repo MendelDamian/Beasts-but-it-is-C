@@ -125,12 +125,15 @@ void draw_server_interface(INTERFACE *interface, SERVER *server)
 
     // Draw legend.
     draw_legend(interface);
-//
+
     // Draw server info.
     draw_server_info(interface, &server->game);
 
     // Draw map.
     draw_map(interface, &server->map);
+
+    // Draw treasures.
+    draw_treasures(interface, server);
 
     // Draw sidebar's players section.
     uint8_t y = 3;
@@ -292,6 +295,26 @@ void draw_entity(INTERFACE *interface, ENTITY *entity)
     }
 }
 
+void draw_treasures(INTERFACE *interface, SERVER *server)
+{
+    if (interface == NULL || server == NULL)
+    {
+        return;
+    }
+
+    NODE *node = server->dropped_treasures->head;
+    while (node)
+    {
+        TREASURE *treasure = (TREASURE *)node->item;
+
+        wattron(interface->win, COLOR_PAIR(PAIR_COIN));
+        mvwaddch(interface->win, treasure->position.y, treasure->position.x, TILE_DROPPED_TREASURE);
+        wattroff(interface->win, COLOR_PAIR(PAIR_COIN));
+
+        node = node->next;
+    }
+}
+
 void draw_map(INTERFACE *interface, MAP *map)
 {
     if (map == NULL)
@@ -327,6 +350,7 @@ void draw_map(INTERFACE *interface, MAP *map)
                 case TILE_TREASURE:
                 case TILE_LARGE_TREASURE:
                 case TILE_COIN:
+                case TILE_DROPPED_TREASURE:
                     color = COLOR_PAIR(PAIR_COIN);
                     break;
             }
@@ -362,7 +386,6 @@ void draw_map_chunk(INTERFACE *interface, MAP_CHUNK *chunk)
                     color = COLOR_PAIR(PAIR_PLAYER);
                     break;
 
-                default:
                 case TILE_EMPTY:
                     color = COLOR_PAIR(PAIR_EMPTY);
                     break;
@@ -379,10 +402,18 @@ void draw_map_chunk(INTERFACE *interface, MAP_CHUNK *chunk)
                     color = COLOR_PAIR(PAIR_CAMPSITE);
                     break;
 
+                case TILE_BEAST:
+                    color = COLOR_PAIR(PAIR_BEAST);
+                    break;
+
                 case TILE_TREASURE:
                 case TILE_LARGE_TREASURE:
                 case TILE_COIN:
+                case TILE_DROPPED_TREASURE:
                     color = COLOR_PAIR(PAIR_COIN);
+                    break;
+
+                default:
                     break;
             }
 

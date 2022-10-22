@@ -96,6 +96,21 @@ static void prepare_map_chunk(SERVER *server, MAP_CHUNK *chunk)
         }
         node = node->next;
     }
+
+
+    node = server->dropped_treasures->head;
+    while (node)
+    {
+        TREASURE *treasure = (TREASURE *)node->item;
+        if (treasure->position.x >= begin_x && treasure->position.x <= end_x
+            && treasure->position.y >= begin_y && treasure->position.y <= end_y)
+        {
+            uint8_t y = treasure->position.y - begin_y;
+            uint8_t x = treasure->position.x - begin_x;
+            chunk->tiles[y][x] = TILE_DROPPED_TREASURE;
+        }
+        node = node->next;
+    }
 }
 
 COORDS map_find_free_tile(SERVER *server)
@@ -115,7 +130,7 @@ COORDS map_find_free_tile(SERVER *server)
         for (uint8_t j = 0; j < map->width; ++j)
         {
             if (map->tiles[i][j] == TILE_EMPTY
-                && get_entity_at_coords(server->entities, (COORDS){ j, i }) == NULL
+                && get_entity_at_coords(server->entities, (COORDS){ j, i }, NULL) == NULL
                 && get_entity_at_spawn_point(server->entities, (COORDS){ j, i }) == NULL
                 && get_treasure_at_coords(server->dropped_treasures, (COORDS){ j, i }) == NULL)
             {
@@ -198,7 +213,6 @@ static void server_remove_treasure(SERVER *server, TREASURE *treasure)
         return;
     }
 
-    server->map.tiles[treasure->position.y][treasure->position.x] = TILE_EMPTY;
     dll_remove(server->dropped_treasures, treasure);
 }
 
@@ -274,6 +288,7 @@ void server_add_beast(SERVER *server)
     ENTITY *beast = server_add_entity(server);
     beast->type = ENTITY_TYPE_BEAST;
     beast->position = coords;
+    beast->spawn_point = coords;
 
     ENTITY_THREAD_ARGS *args = malloc(sizeof(ENTITY_THREAD_ARGS));
     args->server = server;
@@ -399,10 +414,15 @@ void *handle_game_state(SERVER *server)
     {
         ENTITY *entity = node->item;
         TREASURE *treasure = NULL;
+        if (entity->type == ENTITY_TYPE_BEAST)
+        {
+            node = node->next;
+            continue;
+        }
 
         // Check if the entity shares tile with any other entity.
-        ENTITY *other_entity = get_entity_at_coords(server->entities, entity->position);
-        if (other_entity != NULL && other_entity != entity && entity->type != ENTITY_TYPE_BEAST)
+        ENTITY *other_entity = get_entity_at_coords(server->entities, entity->position, entity);
+        if (other_entity != NULL)
         {
             COORDS meeting_point = entity->position;
             uint32_t total_coins = entity->carried_coins + other_entity->carried_coins;
@@ -416,11 +436,10 @@ void *handle_game_state(SERVER *server)
                 other_entity->position = other_entity->spawn_point;
             }
 
-            // Drop treasure.
+            // If the entities are both beasts, treasure is not spawned.
             entity->carried_coins = 0;
             other_entity->carried_coins = 0;
             server_add_treasure(server, meeting_point, total_coins);
-            server->map.tiles[meeting_point.y][meeting_point.x] = TILE_DROPPED_TREASURE;
         }
         // Check for dropped treasures.
         else if ((treasure = get_treasure_at_coords(server->dropped_treasures, entity->position)) != NULL)
@@ -429,7 +448,7 @@ void *handle_game_state(SERVER *server)
             server_remove_treasure(server, treasure);
         }
         // Check if non-beast entity stands on specific block.
-        else if (entity->type != ENTITY_TYPE_BEAST)
+        else
         {
             char stands_on = server->map.tiles[entity->position.y][entity->position.x];
             switch (stands_on)
@@ -647,7 +666,7 @@ void *beast_thread(void *arguments)
         usleep(200000);  // Sleep for 200ms.
 
         pthread_mutex_lock(&game_state_mutex);
-        entity->direction = rand() % 5;
+        entity->direction = rand() % 4;
         pthread_mutex_unlock(&game_state_mutex);
     }
 

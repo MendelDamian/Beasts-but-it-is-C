@@ -132,13 +132,13 @@ void dll_remove(DLL *dll, void *item)
     }
 }
 
-void *get_entity_at_coords(DLL *dll, COORDS coords)
+void *get_entity_at_coords(DLL *dll, COORDS coords, void *avoid)
 {
     NODE *node = dll->head;
     while (node != NULL)
     {
         ENTITY *entity = node->item;
-        if (entity->position.x == coords.x && entity->position.y == coords.y)
+        if (entity->position.x == coords.x && entity->position.y == coords.y && entity != avoid)
         {
             return node->item;
         }
