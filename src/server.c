@@ -1,3 +1,4 @@
+#define _DEFAULT_SOURCE  // To clear warnings about usleep() implicit declaration.
 #include <ncurses.h>
 #include <pthread.h>
 #include <string.h>
@@ -19,7 +20,7 @@ typedef struct entity_thread_args
     SERVER *server;
 } ENTITY_THREAD_ARGS;
 
-void server_init(SERVER *server)
+static void init(SERVER *server)
 {
     if (server == NULL)
     {
@@ -35,7 +36,7 @@ void server_init(SERVER *server)
     server->game.campsite = (COORDS){ 0, 0 };
 }
 
-void server_destroy(SERVER *server)
+static void destroy(SERVER *server)
 {
     if (server == NULL)
     {
@@ -113,7 +114,7 @@ static void prepare_map_chunk(SERVER *server, MAP_CHUNK *chunk)
     }
 }
 
-COORDS map_find_free_tile(SERVER *server)
+static COORDS map_find_free_tile(SERVER *server)
 {
     COORDS coords = {0, 0};
     if (server == NULL)
@@ -158,7 +159,7 @@ COORDS map_find_free_tile(SERVER *server)
     return coords;
 }
 
-static ENTITY *server_add_entity(SERVER *server)
+static ENTITY *add_entity(SERVER *server)
 {
     if (server == NULL)
     {
@@ -168,7 +169,7 @@ static ENTITY *server_add_entity(SERVER *server)
     return dll_push_back(server->entities);
 }
 
-static void server_remove_entity(SERVER *server, ENTITY *entity)
+static void remove_entity(SERVER *server, ENTITY *entity)
 {
     if (server == NULL || entity == NULL)
     {
@@ -193,7 +194,7 @@ static void server_remove_entity(SERVER *server, ENTITY *entity)
     dll_remove(server->entities, entity);
 }
 
-static TREASURE *server_add_treasure(SERVER *server, COORDS coords, uint16_t coins)
+static TREASURE *add_treasure(SERVER *server, COORDS coords, uint16_t coins)
 {
     if (server == NULL)
     {
@@ -206,7 +207,7 @@ static TREASURE *server_add_treasure(SERVER *server, COORDS coords, uint16_t coi
     return treasure;
 }
 
-static void server_remove_treasure(SERVER *server, TREASURE *treasure)
+static void remove_treasure(SERVER *server, TREASURE *treasure)
 {
     if (server == NULL || treasure == NULL)
     {
@@ -216,7 +217,7 @@ static void server_remove_treasure(SERVER *server, TREASURE *treasure)
     dll_remove(server->dropped_treasures, treasure);
 }
 
-uint8_t player_get_number(DLL *entities)
+static uint8_t player_get_number(DLL *entities)
 {
     if (entities == NULL)
     {
@@ -242,7 +243,7 @@ uint8_t player_get_number(DLL *entities)
     return number;
 }
 
-static void server_spawn_cash(SERVER *server, TILE type)
+static void spawn_cash(SERVER *server, TILE type)
 {
     if (server == NULL)
     {
@@ -265,7 +266,7 @@ static void server_spawn_cash(SERVER *server, TILE type)
     pthread_mutex_unlock(&game_state_mutex);
 }
 
-void server_add_beast(SERVER *server)
+static void add_beast(SERVER *server)
 {
     if (server == NULL)
     {
@@ -285,7 +286,7 @@ void server_add_beast(SERVER *server)
 
     server->number_of_beasts++;
 
-    ENTITY *beast = server_add_entity(server);
+    ENTITY *beast = add_entity(server);
     beast->type = ENTITY_TYPE_BEAST;
     beast->position = coords;
     beast->spawn_point = coords;
@@ -311,20 +312,20 @@ static void on_key_pressed(int key, SERVER *server)
             break;
 
         case TILE_COIN:
-            server_spawn_cash(server, TILE_COIN);
+            spawn_cash(server, TILE_COIN);
             break;
 
         case TILE_TREASURE:
-            server_spawn_cash(server, TILE_TREASURE);
+            spawn_cash(server, TILE_TREASURE);
             break;
 
         case TILE_LARGE_TREASURE:
-            server_spawn_cash(server, TILE_LARGE_TREASURE);
+            spawn_cash(server, TILE_LARGE_TREASURE);
             break;
 
         case 'B':
         case 'b':
-            server_add_beast(server);
+            add_beast(server);
             break;
 
         default:
@@ -332,11 +333,11 @@ static void on_key_pressed(int key, SERVER *server)
     }
 }
 
-void *handle_game_state(SERVER *server)
+static void handle_game_state(SERVER *server)
 {
     if (server == NULL)
     {
-        return NULL;
+        return;
     }
 
     // To prevent the game from de-synchronization, we need to divide the game state handle into two phases:
@@ -439,13 +440,13 @@ void *handle_game_state(SERVER *server)
             // If the entities are both beasts, treasure is not spawned.
             entity->carried_coins = 0;
             other_entity->carried_coins = 0;
-            server_add_treasure(server, meeting_point, total_coins);
+            add_treasure(server, meeting_point, total_coins);
         }
         // Check for dropped treasures.
         else if ((treasure = get_treasure_at_coords(server->dropped_treasures, entity->position)) != NULL)
         {
             entity->carried_coins += treasure->coins;
-            server_remove_treasure(server, treasure);
+            remove_treasure(server, treasure);
         }
         // Check if non-beast entity stands on specific block.
         else
@@ -496,11 +497,9 @@ void *handle_game_state(SERVER *server)
 
         node = node->next;
     }
-
-    return NULL;
 }
 
-static void *server_entity_handler(void *arguments)
+static void *entity_thread(void *arguments)
 {
     if (arguments == NULL)
     {
@@ -527,7 +526,7 @@ static void *server_entity_handler(void *arguments)
         {
             // Client has disconnected or something went wrong.
             close(entity->socket_fd);
-            server_remove_entity(server, entity);
+            remove_entity(server, entity);
             pthread_mutex_unlock(&game_state_mutex);
             pthread_exit(NULL);
         }
@@ -540,7 +539,7 @@ static void *server_entity_handler(void *arguments)
 
             case PACKET_TYPE_CLIENT_QUIT:
                 close(entity->socket_fd);
-                server_remove_entity(server, entity);
+                remove_entity(server, entity);
                 pthread_mutex_unlock(&game_state_mutex);
                 pthread_exit(NULL);
 
@@ -554,7 +553,7 @@ static void *server_entity_handler(void *arguments)
     return NULL;
 }
 
-static void *server_acceptance(void *arguments)
+static void *acceptance_thread(void *arguments)
 {
     if (arguments == NULL)
     {
@@ -613,7 +612,7 @@ static void *server_acceptance(void *arguments)
 
                 server->number_of_players++;
 
-                entity = server_add_entity(server);
+                entity = add_entity(server);
                 entity->type = packet.client_handshake.type;
                 entity->pid = packet.client_handshake.pid;
                 entity->number = player_get_number(server->entities);
@@ -641,12 +640,124 @@ static void *server_acceptance(void *arguments)
         args->server = server;
         args->entity = entity;
 
-        pthread_create(&entity->thread, NULL, server_entity_handler, args);
+        pthread_create(&entity->thread, NULL, entity_thread, args);
 
         pthread_mutex_unlock(&game_state_mutex);
     }
 
     return NULL;
+}
+
+static DIRECTION beast_determine_direction(SERVER *server, ENTITY *beast)
+{
+    if (server == NULL || beast == NULL)
+    {
+        return NONE;
+    }
+
+    MAP_CHUNK chunk;
+    map_get_chunk(&server->map, &chunk, beast->position);
+    prepare_map_chunk(server, &chunk);
+
+    bool found = false;
+    for (int i = 0; i < chunk.height; ++i)
+    {
+        for (int j = 0; j < chunk.width; ++j)
+        {
+            if (is_tile_player(chunk.tiles[i][j]))
+            {
+                found = true;
+                break;
+            }
+        }
+        if (found)
+        {
+            break;
+        }
+    }
+
+    if (!found)
+    {
+        return rand() % 4;
+    }
+
+    // Close eyes.
+    if (is_tile_player(chunk.tiles[1][2]))
+    {
+        return NORTH;
+    }
+    if (is_tile_player(chunk.tiles[2][3]))
+    {
+        return EAST;
+    }
+    if (is_tile_player(chunk.tiles[3][2]))
+    {
+        return SOUTH;
+    }
+    if (is_tile_player(chunk.tiles[2][1]))
+    {
+        return WEST;
+    }
+
+    if (chunk.tiles[1][2] != TILE_WALL && is_tile_player(chunk.tiles[0][2]))
+    {
+        return NORTH;
+    }
+    if (chunk.tiles[2][3] != TILE_WALL && is_tile_player(chunk.tiles[2][4]))
+    {
+        return EAST;
+    }
+    if (chunk.tiles[3][2] != TILE_WALL && is_tile_player(chunk.tiles[4][2]))
+    {
+        return SOUTH;
+    }
+    if (chunk.tiles[2][1] != TILE_WALL && is_tile_player(chunk.tiles[2][0]))
+    {
+        return WEST;
+    }
+
+    if (chunk.tiles[1][2] != TILE_WALL && is_tile_player(chunk.tiles[0][1])
+        && (chunk.tiles[0][2] == TILE_WALL || chunk.tiles[1][1] == TILE_WALL))
+    {
+        return NORTH;
+    }
+    if (chunk.tiles[1][2] != TILE_WALL && is_tile_player(chunk.tiles[0][3])
+        && (chunk.tiles[0][2] == TILE_WALL || chunk.tiles[1][3] == TILE_WALL))
+    {
+        return NORTH;
+    }
+    if (chunk.tiles[2][3] != TILE_WALL && is_tile_player(chunk.tiles[1][4])
+        && (chunk.tiles[2][4] == TILE_WALL || chunk.tiles[1][3] == TILE_WALL))
+    {
+        return EAST;
+    }
+    if (chunk.tiles[2][3] != TILE_WALL && is_tile_player(chunk.tiles[3][4])
+        && (chunk.tiles[2][4] == TILE_WALL || chunk.tiles[3][3] == TILE_WALL))
+    {
+        return EAST;
+    }
+    if (chunk.tiles[3][2] != TILE_WALL && is_tile_player(chunk.tiles[4][1])
+        && (chunk.tiles[4][2] == TILE_WALL || chunk.tiles[3][1] == TILE_WALL))
+    {
+        return SOUTH;
+    }
+    if (chunk.tiles[3][2] != TILE_WALL && is_tile_player(chunk.tiles[4][3])
+        && (chunk.tiles[4][2] == TILE_WALL || chunk.tiles[3][3] == TILE_WALL))
+    {
+        return SOUTH;
+    }
+    if (chunk.tiles[2][1] != TILE_WALL && is_tile_player(chunk.tiles[1][0])
+        && (chunk.tiles[2][0] == TILE_WALL || chunk.tiles[1][1] == TILE_WALL))
+    {
+        return WEST;
+    }
+    if (chunk.tiles[2][1] != TILE_WALL && is_tile_player(chunk.tiles[3][0])
+        && (chunk.tiles[2][0] == TILE_WALL || chunk.tiles[3][1] == TILE_WALL))
+    {
+        return WEST;
+    }
+
+    return rand() % 4;
 }
 
 void *beast_thread(void *arguments)
@@ -666,7 +777,7 @@ void *beast_thread(void *arguments)
         usleep(200000);  // Sleep for 200ms.
 
         pthread_mutex_lock(&game_state_mutex);
-        entity->direction = rand() % 4;
+        entity->direction = beast_determine_direction(server, entity);
         pthread_mutex_unlock(&game_state_mutex);
     }
 
@@ -682,19 +793,19 @@ void server_main_loop(int server_socket_fd)
     INTERFACE *interface = interface_init();
 
     SERVER server;
-    server_init(&server);
+    init(&server);
 
     server.game.server_pid = getpid();
     server.game.server_socket_fd = server_socket_fd;
 
     if (map_load(&server.map, MAP_FILE, &server.game.campsite))
     {
-        perror("ERROR on map_load");
+        // Could not load map.
         return;
     }
 
     pthread_t server_acceptance_thread;
-    pthread_create(&server_acceptance_thread, NULL, server_acceptance, (void *)&server);
+    pthread_create(&server_acceptance_thread, NULL, acceptance_thread, (void *) &server);
     pthread_detach(server_acceptance_thread);
 
     while (server.game.running)
@@ -720,6 +831,6 @@ void server_main_loop(int server_socket_fd)
     }
 
     pthread_cancel(server_acceptance_thread);
-    server_destroy(&server);
+    destroy(&server);
     interface_destroy(interface);
 }

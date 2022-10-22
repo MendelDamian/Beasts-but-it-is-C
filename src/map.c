@@ -128,3 +128,8 @@ COORDS map_chunk_get_campsite(MAP_CHUNK *chunk)
 
     return coords;
 }
+
+bool is_tile_player(TILE tile)
+{
+    return tile == '1' || tile == '2' || tile == '3' || tile == '4';
+}

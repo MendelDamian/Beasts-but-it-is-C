@@ -1,4 +1,3 @@
-#define _DEFAULT_SOURCE  // To clear warnings about usleep() implicit declaration.
 #include <sys/time.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -63,7 +62,7 @@ static void on_key_pressed(int key, GAME *game, ENTITY *entity)
     }
 }
 
-void *client_listener(void *arguments)
+static void *listener_thread(void *arguments)
 {
     if (arguments == NULL)
     {
@@ -96,8 +95,8 @@ void *client_listener(void *arguments)
 
         switch (packet.type)
         {
-            case PACKET_TYPE_SERVER_GAME_END:
             case PACKET_TYPE_SERVER_FULL:
+            case PACKET_TYPE_SERVER_GAME_END:
                 game->running = false;
                 close(game->server_socket_fd);
                 pthread_mutex_unlock(&client_mutex);
@@ -161,8 +160,8 @@ void client_main_loop(int sock_fd)
     args.game = &game;
     args.entity = &entity;
     args.chunk = &chunk;
-    pthread_t listener_thread;
-    pthread_create(&listener_thread, NULL, client_listener, &args);
+    pthread_t listener;
+    pthread_create(&listener, NULL, listener_thread, &args);
 
     while (game.running)
     {
@@ -191,7 +190,7 @@ void client_main_loop(int sock_fd)
         game.turns++;
     }
 
-    pthread_cancel(listener_thread);
+    pthread_cancel(listener);
 
     interface_destroy(interface);
 }
