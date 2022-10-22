@@ -6,17 +6,17 @@ The game was written as a project of "Operating Systems" classes to consolidate 
 - [@MendelDamian](https://www.github.com/MendelDamian)
 
 
-## Demo
-
-
-
-
 ## Tech stack
 
 - UNIX Sockets
 - Threads
 - ncurses - graphics library
 
+
+## Demo
+
+![Server preview](demo/server-preview.jpg)
+![Client preview](demo/client-preview.jpg)
 
 ## Build
 
