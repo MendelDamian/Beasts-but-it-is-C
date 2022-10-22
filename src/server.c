@@ -13,11 +13,11 @@
 
 pthread_mutex_t game_state_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-typedef struct server_entity_handler_args_t
+typedef struct entity_thread_args
 {
     ENTITY *entity;
     SERVER *server;
-} SERVER_ENTITY_HANDLER_ARGS;
+} ENTITY_THREAD_ARGS;
 
 void server_init(SERVER *server)
 {
@@ -251,6 +251,36 @@ static void server_spawn_cash(SERVER *server, TILE type)
     pthread_mutex_unlock(&game_state_mutex);
 }
 
+void server_add_beast(SERVER *server)
+{
+    if (server == NULL)
+    {
+        return;
+    }
+
+    if (server->number_of_beasts >= MAX_BEASTS)
+    {
+        return;
+    }
+
+    COORDS coords = map_find_free_tile(server);
+    if (coords.x == 0 && coords.y == 0)
+    {
+        return;
+    }
+
+    server->number_of_beasts++;
+
+    ENTITY *beast = server_add_entity(server);
+    beast->type = ENTITY_TYPE_BEAST;
+    beast->position = coords;
+
+    ENTITY_THREAD_ARGS *args = malloc(sizeof(ENTITY_THREAD_ARGS));
+    args->server = server;
+    args->entity = beast;
+    pthread_create(&beast->thread, NULL, beast_thread, args);
+}
+
 static void on_key_pressed(int key, SERVER *server)
 {
     if (server == NULL)
@@ -275,6 +305,11 @@ static void on_key_pressed(int key, SERVER *server)
 
         case TILE_LARGE_TREASURE:
             server_spawn_cash(server, TILE_LARGE_TREASURE);
+            break;
+
+        case 'B':
+        case 'b':
+            server_add_beast(server);
             break;
 
         default:
@@ -367,7 +402,7 @@ void *handle_game_state(SERVER *server)
 
         // Check if the entity shares tile with any other entity.
         ENTITY *other_entity = get_entity_at_coords(server->entities, entity->position);
-        if (other_entity != NULL && other_entity != entity)
+        if (other_entity != NULL && other_entity != entity && entity->type != ENTITY_TYPE_BEAST)
         {
             COORDS meeting_point = entity->position;
             uint32_t total_coins = entity->carried_coins + other_entity->carried_coins;
@@ -432,10 +467,13 @@ void *handle_game_state(SERVER *server)
     while (node)
     {
         ENTITY *entity = node->item;
-        MAP_CHUNK chunk;
-        map_get_chunk(&server->map, &chunk, entity->position);
-        prepare_map_chunk(server, &chunk);
-        send_server_game_data(entity->socket_fd, entity, &chunk);
+        if (entity->type != ENTITY_TYPE_BEAST)
+        {
+            MAP_CHUNK chunk;
+            map_get_chunk(&server->map, &chunk, entity->position);
+            prepare_map_chunk(server, &chunk);
+            send_server_game_data(entity->socket_fd, entity, &chunk);
+        }
 
         node = node->next;
     }
@@ -450,7 +488,7 @@ static void *server_entity_handler(void *arguments)
         return NULL;
     }
 
-    SERVER_ENTITY_HANDLER_ARGS args = *(SERVER_ENTITY_HANDLER_ARGS *)arguments;
+    ENTITY_THREAD_ARGS args = *(ENTITY_THREAD_ARGS *)arguments;
     free(arguments);
 
     if (args.server == NULL || args.entity == NULL)
@@ -580,12 +618,36 @@ static void *server_acceptance(void *arguments)
         entity->socket_fd = client_socket;
         send_server_handshake(entity->socket_fd, entity, &server->game);
 
-        SERVER_ENTITY_HANDLER_ARGS *args = malloc(sizeof(SERVER_ENTITY_HANDLER_ARGS));
+        ENTITY_THREAD_ARGS *args = malloc(sizeof(ENTITY_THREAD_ARGS));
         args->server = server;
         args->entity = entity;
 
         pthread_create(&entity->thread, NULL, server_entity_handler, args);
 
+        pthread_mutex_unlock(&game_state_mutex);
+    }
+
+    return NULL;
+}
+
+void *beast_thread(void *arguments)
+{
+    if (arguments == NULL)
+    {
+        return NULL;
+    }
+
+    ENTITY_THREAD_ARGS args = *(ENTITY_THREAD_ARGS *)arguments;
+    free(arguments);
+    ENTITY *entity = args.entity;
+    SERVER *server = args.server;
+
+    while (server->game.running)
+    {
+        usleep(200000);  // Sleep for 200ms.
+
+        pthread_mutex_lock(&game_state_mutex);
+        entity->direction = rand() % 5;
         pthread_mutex_unlock(&game_state_mutex);
     }
 

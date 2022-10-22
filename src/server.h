@@ -22,4 +22,6 @@ typedef struct server_t
 
 void server_main_loop(int server_socket_fd);
 
+void *beast_thread(void *arguments);
+
 #endif //SERVER_H

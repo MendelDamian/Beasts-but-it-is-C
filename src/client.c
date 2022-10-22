@@ -142,8 +142,7 @@ void client_main_loop(int sock_fd)
     ENTITY entity;
     entity_init(&entity);
     entity.pid = getpid();
-    // Bot is child process of the server.
-    entity.type = entity.pid == 0 ? ENTITY_TYPE_BOT : ENTITY_TYPE_PLAYER;
+    entity.type = ENTITY_TYPE_PLAYER;
 
     GAME game;
     game_init(&game);
@@ -167,21 +166,12 @@ void client_main_loop(int sock_fd)
 
     while (game.running)
     {
-        if (entity.type == ENTITY_TYPE_PLAYER)
-        {
-            int key = getch();
-            on_key_pressed(key, &game, &entity);
+        int key = getch();
+        on_key_pressed(key, &game, &entity);
 
-            if (game.running == false)
-            {
-                break;
-            }
-        }
-        else
+        if (game.running == false)
         {
-            // Sleep for 200ms.
-            nanosleep((const struct timespec[]){{0, 200000000L}}, NULL);
-            entity.direction = rand() % 5;
+            break;
         }
 
         send_client_move(game.server_socket_fd, &entity);
@@ -193,13 +183,9 @@ void client_main_loop(int sock_fd)
             continue;
         }
 
-
-        if (entity.type == ENTITY_TYPE_PLAYER)
-        {
-            pthread_mutex_lock(&client_mutex);
-            draw_client_interface(interface, &chunk, &game, &entity);
-            pthread_mutex_unlock(&client_mutex);
-        }
+        pthread_mutex_lock(&client_mutex);
+        draw_client_interface(interface, &chunk, &game, &entity);
+        pthread_mutex_unlock(&client_mutex);
 
         delta_time -= TIME_PER_TURN;
         game.turns++;
@@ -207,8 +193,5 @@ void client_main_loop(int sock_fd)
 
     pthread_cancel(listener_thread);
 
-    if (entity.type == ENTITY_TYPE_PLAYER)
-    {
-        interface_destroy(interface);
-    }
+    interface_destroy(interface);
 }

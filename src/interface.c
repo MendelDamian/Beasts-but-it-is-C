@@ -171,15 +171,16 @@ void draw_server_interface(INTERFACE *interface, SERVER *server)
     while (node)
     {
         ENTITY *entity = (ENTITY *)node->item;
+
+        // Draw on map.
+        draw_entity(interface, entity);
+
         if (entity->type != ENTITY_TYPE_BEAST)
         {
             // Draw on sidebar.
             x = 15 + 10 * (entity->number - 1);
             wmove(interface->win, SIDEBAR_OFFSET_Y + y, SIDEBAR_OFFSET_X + x);
             wprintw(interface->win, "Player %d", entity->number);
-
-            // Draw on map.
-            draw_entity(interface, entity);
 
             wmove(interface->win, SIDEBAR_OFFSET_Y + y + 1, SIDEBAR_OFFSET_X + x);
             wprintw(interface->win, "%d", entity->pid);
