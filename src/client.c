@@ -15,6 +15,7 @@ typedef struct client_listener_args_t
     GAME *game;
     ENTITY *entity;
     MAP_CHUNK *chunk;
+    INTERFACE *interface;
 } CLIENT_LISTENER_ARGS;
 
 static void on_key_pressed(int key, GAME *game, ENTITY *entity)
@@ -70,7 +71,7 @@ static void *listener_thread(void *arguments)
     }
 
     CLIENT_LISTENER_ARGS args = *(CLIENT_LISTENER_ARGS *)arguments;
-    if (args.game == NULL || args.entity == NULL || args.chunk == NULL)
+    if (args.game == NULL || args.entity == NULL || args.chunk == NULL || args.interface == NULL)
     {
         return NULL;
     }
@@ -78,6 +79,7 @@ static void *listener_thread(void *arguments)
     GAME *game = args.game;
     ENTITY *entity = args.entity;
     MAP_CHUNK *chunk = args.chunk;
+    INTERFACE *interface = args.interface;
 
     while (game->running)
     {
@@ -125,6 +127,8 @@ static void *listener_thread(void *arguments)
                 break;
         }
 
+        draw_client_interface(interface, chunk, game, entity);
+
         pthread_mutex_unlock(&client_mutex);
     }
 
@@ -160,6 +164,7 @@ void client_main_loop(int sock_fd)
     args.game = &game;
     args.entity = &entity;
     args.chunk = &chunk;
+    args.interface = interface;
     pthread_t listener;
     pthread_create(&listener, NULL, listener_thread, &args);
 
@@ -181,10 +186,6 @@ void client_main_loop(int sock_fd)
         {
             continue;
         }
-
-        pthread_mutex_lock(&client_mutex);
-        draw_client_interface(interface, &chunk, &game, &entity);
-        pthread_mutex_unlock(&client_mutex);
 
         delta_time -= TIME_PER_TURN;
         game.turns++;
