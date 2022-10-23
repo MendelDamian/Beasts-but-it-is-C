@@ -35,7 +35,11 @@ To build this project run
 ```bash
   make
 ```
+If you want to build with debug flags, run
 
+```bash
+  make DEBUG=1
+```
 
 ## Run Locally
 
