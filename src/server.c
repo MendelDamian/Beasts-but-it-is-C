@@ -278,6 +278,8 @@ static void add_beast(SERVER *server)
         return;
     }
 
+    pthread_mutex_lock(&game_state_mutex);
+
     COORDS coords = map_find_free_tile(server);
     if (coords.x == 0 && coords.y == 0)
     {
@@ -290,6 +292,8 @@ static void add_beast(SERVER *server)
     beast->type = ENTITY_TYPE_BEAST;
     beast->position = coords;
     beast->spawn_point = coords;
+
+    pthread_mutex_unlock(&game_state_mutex);
 
     ENTITY_THREAD_ARGS *args = malloc(sizeof(ENTITY_THREAD_ARGS));
     args->server = server;
@@ -805,7 +809,7 @@ void server_main_loop(int server_socket_fd)
     }
 
     pthread_t server_acceptance_thread;
-    pthread_create(&server_acceptance_thread, NULL, acceptance_thread, (void *) &server);
+    pthread_create(&server_acceptance_thread, NULL, acceptance_thread, (void *)&server);
     pthread_detach(server_acceptance_thread);
 
     while (server.game.running)
