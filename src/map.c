@@ -81,6 +81,8 @@ void map_get_chunk(MAP *map, MAP_CHUNK *chunk, COORDS position)
         return;
     }
 
+    memset(chunk, 0, sizeof(MAP_CHUNK));
+
     chunk->position = position;
     chunk->width = MAP_CHUNK_WIDTH;
     chunk->height = MAP_CHUNK_HEIGHT;

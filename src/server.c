@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <poll.h>
 
 #include "server.h"
 #include "network_protocol.h"
@@ -47,14 +48,17 @@ static void destroy(SERVER *server)
     while (node != NULL)
     {
         ENTITY *entity = (ENTITY *)node->item;
-        pthread_cancel(entity->thread);
+        if (entity->type != ENTITY_TYPE_BEAST)
+        {
+            close(entity->socket_fd);
+        }
+        pthread_join(entity->thread, NULL);
         node = node->next;
     }
 
-    dll_clear(server->entities);
-    dll_clear(server->dropped_treasures);
-    free(server->entities);
-    free(server->dropped_treasures);
+    dll_destroy(server->entities);
+    dll_destroy(server->dropped_treasures);
+    pthread_mutex_destroy(&game_state_mutex);
 }
 
 static void prepare_map_chunk(SERVER *server, MAP_CHUNK *chunk)
@@ -570,12 +574,27 @@ static void *acceptance_thread(void *arguments)
         return NULL;
     }
 
+    struct pollfd pfds[1];
+    pfds[0].fd = server->game.server_socket_fd;
+    pfds[0].events = POLLIN;
+
     while (server->game.running)
     {
-        int client_socket = accept(server->game.server_socket_fd,NULL, NULL);
-        if (client_socket == -1)
+        int poll_result = poll(pfds, 1, 250); // 250ms timeout.
+        if (poll_result == -1)
+        {
+            break;
+        }
+
+        if (poll_result == 0 || !(pfds[0].revents & POLLIN))
         {
             continue;
+        }
+
+        int client_socket = accept(pfds[0].fd ,NULL, NULL);
+        if (client_socket == -1)
+        {
+            break;
         }
 
         PACKET packet;
@@ -779,6 +798,10 @@ void *beast_thread(void *arguments)
     while (server->game.running)
     {
         usleep(200000);  // Sleep for 200ms.
+        if (!server->game.running)
+        {
+            break;
+        }
 
         pthread_mutex_lock(&game_state_mutex);
         entity->direction = beast_determine_direction(server, entity);
@@ -810,7 +833,6 @@ void server_main_loop(int server_socket_fd)
 
     pthread_t server_acceptance_thread;
     pthread_create(&server_acceptance_thread, NULL, acceptance_thread, (void *)&server);
-    pthread_detach(server_acceptance_thread);
 
     while (server.game.running)
     {
@@ -834,7 +856,8 @@ void server_main_loop(int server_socket_fd)
         server.game.turns++;
     }
 
-    pthread_cancel(server_acceptance_thread);
+    close(server_socket_fd);
+    pthread_join(server_acceptance_thread, NULL);
     destroy(&server);
     interface_destroy(interface);
 }

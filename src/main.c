@@ -62,6 +62,5 @@ int main(int argc, char *argv[])
         client_main_loop(socket_fd);
     }
 
-    close(socket_fd);
-    return 0;
+    pthread_exit(0);
 }

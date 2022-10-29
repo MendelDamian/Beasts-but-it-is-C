@@ -35,4 +35,7 @@ $(BUILD_DIR):
 run: $(BUILD_DIR) $(EXEC)
 	./$(EXEC)
 
+valgrind: $(BUILD_DIR) $(EXEC)
+	valgrind --tool=memcheck --leak-check=full -s ./$(EXEC)
+
 .PHONY: $(BUILD_DIR) clean run

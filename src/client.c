@@ -1,6 +1,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "network_protocol.h"
 #include "client.h"
@@ -142,6 +143,7 @@ void client_main_loop(int sock_fd)
     gettimeofday(&last_update, NULL);
 
     MAP_CHUNK chunk;
+    memset(&chunk, 0, sizeof(MAP_CHUNK));
     ENTITY entity;
     entity_init(&entity);
     entity.pid = getpid();
@@ -191,7 +193,8 @@ void client_main_loop(int sock_fd)
         game.turns++;
     }
 
-    pthread_cancel(listener);
-
+    close(game.server_socket_fd);
+    pthread_join(listener, NULL);
     interface_destroy(interface);
+    pthread_mutex_destroy(&client_mutex);
 }
