@@ -15,6 +15,21 @@ The players can also attack each other, which will result in dropping the cash t
 To make game harder, there are also some beasts on the map, which will attack the players if they are close enough.
 
 
+## Keybindings
+### Server
+- `q`/`Q` - close the server
+- `b`/`B` - spawn a beast
+- `c` - spawn a coin
+- `t` - spawn a treasure
+- `T` - spawn a large treasure
+
+### Client
+- `q`/`Q` - quit the game
+- `w`/`W`/`&uarr;` - move up
+- `s`/`S`/`&darr;` - move down
+- `a`/`A`/`&larr;` - move left
+- `d`/`D`/`&rarr;` - move right
+
 ## Demo
 
 ![Server preview](demo/server-preview.jpg)
