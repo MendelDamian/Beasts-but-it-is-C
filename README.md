@@ -25,10 +25,10 @@ To make game harder, there are also some beasts on the map, which will attack th
 
 ### Client
 - `q`/`Q` - quit the game
-- `w`/`W`/`&uarr;` - move up
-- `s`/`S`/`&darr;` - move down
-- `a`/`A`/`&larr;` - move left
-- `d`/`D`/`&rarr;` - move right
+- `w`/`W`/ &uarr; - move up
+- `s`/`S`/ &darr; - move down
+- `a`/`A`/ &larr; - move left
+- `d`/`D`/ &rarr; - move right
 
 ## Demo
 
