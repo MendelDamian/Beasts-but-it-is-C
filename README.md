@@ -62,6 +62,6 @@ Start the game by using Makefile
 ```
 or directly
 ```bash
-  ./build/Beasts
+  ./Beasts
 ```
 

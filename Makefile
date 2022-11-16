@@ -16,7 +16,7 @@ BUILD_DIR = build
 
 SRC = $(wildcard $(SRC_DIR)/*.c)
 OBJ = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRC))
-EXEC = $(BUILD_DIR)/Beasts
+EXEC = Beasts
 
 all: $(BUILD_DIR) $(EXEC)
 

@@ -138,7 +138,7 @@ static void *listener_thread(void *arguments)
 
 void client_main_loop(int sock_fd)
 {
-    double delta_time = TIME_PER_TURN;
+    double elapsed_time = TIME_PER_TURN;
     struct timeval last_update;
     gettimeofday(&last_update, NULL);
 
@@ -182,14 +182,14 @@ void client_main_loop(int sock_fd)
 
         send_client_move(game.server_socket_fd, &entity);
 
-        update_timer(&delta_time, &last_update);
+        update_timer(&elapsed_time, &last_update);
 
-        if (delta_time < TIME_PER_TURN)
+        if (elapsed_time < TIME_PER_TURN)
         {
             continue;
         }
 
-        delta_time -= TIME_PER_TURN;
+        elapsed_time -= TIME_PER_TURN;
         game.turns++;
     }
 

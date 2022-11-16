@@ -813,7 +813,7 @@ void *beast_thread(void *arguments)
 
 void server_main_loop(int server_socket_fd)
 {
-    double delta_time = TIME_PER_TURN;
+    double elapsed_time = TIME_PER_TURN;
     struct timeval last_update;
     gettimeofday(&last_update, NULL);
 
@@ -838,9 +838,9 @@ void server_main_loop(int server_socket_fd)
     {
         int key = getch();
         on_key_pressed(key, &server);
-        update_timer(&delta_time, &last_update);
+        update_timer(&elapsed_time, &last_update);
 
-        if (delta_time < TIME_PER_TURN)
+        if (elapsed_time < TIME_PER_TURN)
         {
             continue;
         }
@@ -852,7 +852,7 @@ void server_main_loop(int server_socket_fd)
 
         pthread_mutex_unlock(&game_state_mutex);
 
-        delta_time -= TIME_PER_TURN;
+        elapsed_time -= TIME_PER_TURN;
         server.game.turns++;
     }
 
